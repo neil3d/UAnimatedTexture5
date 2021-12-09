@@ -1,0 +1,13 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.0EA",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "UAnimatedTexture5",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

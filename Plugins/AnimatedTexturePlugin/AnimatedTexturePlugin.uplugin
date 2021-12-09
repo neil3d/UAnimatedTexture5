@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "AnimatedTexturePlugin",
+	"Description": "Import Animated GIF as a new AnimtedTexture asset type",
+	"Category": "Other",
+	"CreatedBy": "Neil Fang",
+	"CreatedByURL": "https://github.com/neil3d/UAnimatedTexture5",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "AnimatedTexturePlugin",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
