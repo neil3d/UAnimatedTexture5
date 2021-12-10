@@ -5,7 +5,7 @@
 	"Description": "",
 	"Modules": [
 		{
-			"Name": "UAnimatedTexture5",
+			"Name": "AnimatedTextureDemo",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}

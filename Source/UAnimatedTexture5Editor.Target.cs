@@ -9,6 +9,6 @@ public class UAnimatedTexture5EditorTarget : TargetRules
 	{
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V2;
-		ExtraModuleNames.AddRange( new string[] { "UAnimatedTexture5" } );
+		ExtraModuleNames.AddRange( new string[] { "AnimatedTextureDemo" } );
 	}
 }
