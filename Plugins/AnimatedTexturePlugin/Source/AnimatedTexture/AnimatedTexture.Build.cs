@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class AnimatedTexturePlugin : ModuleRules
+public class AnimatedTexture : ModuleRules
 {
-	public AnimatedTexturePlugin(ReadOnlyTargetRules Target) : base(Target)
+	public AnimatedTexture(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		

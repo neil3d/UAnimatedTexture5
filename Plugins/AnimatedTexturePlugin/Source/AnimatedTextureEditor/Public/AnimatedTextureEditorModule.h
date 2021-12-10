@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
-class FAnimatedTexturePluginModule : public IModuleInterface
+class FAnimatedTextureEditorModule : public IModuleInterface
 {
 public:
 
