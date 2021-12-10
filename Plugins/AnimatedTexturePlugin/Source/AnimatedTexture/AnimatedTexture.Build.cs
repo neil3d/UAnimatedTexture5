@@ -27,6 +27,7 @@ public class AnimatedTexture : ModuleRules
 			{
 				"Core",
 				// ... add other public dependencies that you statically link with here ...
+				"Engine",
 			}
 			);
 			
@@ -35,10 +36,9 @@ public class AnimatedTexture : ModuleRules
 			new string[]
 			{
 				"CoreUObject",
-				"Engine",
-				"Slate",
-				"SlateCore",
 				// ... add private dependencies that you statically link with here ...	
+				"RHI",
+				"RenderCore"
 			}
 			);
 		
