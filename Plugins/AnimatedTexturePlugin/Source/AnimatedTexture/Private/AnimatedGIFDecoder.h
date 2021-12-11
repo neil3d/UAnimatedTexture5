@@ -14,6 +14,7 @@ public:
 
 	virtual bool LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize) override;
 	virtual void Close() override;
+	virtual bool Ready() override { return mGIF != nullptr; }
 
 	virtual uint32 PlayFrame(uint32 DefaultFrameDelay, bool bLooping) override;
 	virtual void Reset() override;

@@ -12,6 +12,7 @@ public:
 
 	virtual bool LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize) = 0;
 	virtual void Close() = 0;
+	virtual bool Ready() = 0;
 
 	/**
 	 * @return frame delay in milliseconds

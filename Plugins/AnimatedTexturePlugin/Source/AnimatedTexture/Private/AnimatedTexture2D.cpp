@@ -109,15 +109,6 @@ void UAnimatedTexture2D::ImportFile(EAnimatedTextureType InFileType, const uint8
 	FileBlob = TArray<uint8>(InBuffer, InBufferSize);
 }
 
-void UAnimatedTexture2D::UpdateFirstFrame()
-{
-	if (Decoder && Resource)
-	{
-		FrameDelay = RenderFrameToTexture();
-		FrameTime = 0;
-	}
-}
-
 float UAnimatedTexture2D::RenderFrameToTexture()
 {
 	// decode a new frame to memory buffer

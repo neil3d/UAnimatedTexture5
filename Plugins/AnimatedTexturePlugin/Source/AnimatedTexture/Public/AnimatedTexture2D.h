@@ -118,8 +118,6 @@ public:	// UObject Interface.
 public: // Internal APIs
 	void ImportFile(EAnimatedTextureType InFileType, const uint8* InBuffer, uint32 InBufferSize);
 
-	void UpdateFirstFrame();
-
 	float RenderFrameToTexture();
 
 private:

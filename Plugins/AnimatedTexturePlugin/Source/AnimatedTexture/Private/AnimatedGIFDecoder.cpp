@@ -234,11 +234,13 @@ bool FAnimatedGIFDecoder::SupportsTransparency() const
 }
 
 void FAnimatedGIFDecoder::ClearFrameBuffer(ColorMapObject* ColorMap,
-	bool bTransparent) {
+	bool bTransparent) 
+{
 	FColor bg = { 0, 0, 0, 255 };
 
 	if (ColorMap && mGIF->SBackGroundColor >= 0 &&
-		mGIF->SBackGroundColor < ColorMap->ColorCount) {
+		mGIF->SBackGroundColor < ColorMap->ColorCount) 
+	{
 		const GifColorType& colorEntry =
 			mGIF->SColorMap->Colors[mGIF->SBackGroundColor];
 		uint8_t alpha = bTransparent ? 0 : 255;

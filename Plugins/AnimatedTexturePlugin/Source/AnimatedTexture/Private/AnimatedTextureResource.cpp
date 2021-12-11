@@ -77,9 +77,6 @@ void FAnimatedTextureResource::InitRHI()
 	TextureRHI = RHICreateTexture2D(GetSizeX(), GetSizeY(), PF_B8G8R8A8, NumMips, 1, Flags, CreateInfo);
 	TextureRHI->SetName(Owner->GetFName());
 	RHIUpdateTextureReference(Owner->TextureReference.TextureReferenceRHI, TextureRHI);
-
-	if (Owner)
-		Owner->UpdateFirstFrame();
 }
 
 void FAnimatedTextureResource::ReleaseRHI()
