@@ -64,6 +64,7 @@ void FWebpDecoder::Close()
 	{
 		WebPAnimDecoderDelete(Decoder);
 		Decoder = nullptr;
+		FrameBuffer = nullptr;
 	}
 }
 
@@ -97,6 +98,7 @@ uint32 FWebpDecoder::PlayFrame(uint32 DefaultFrameDelay, bool bLooping)
 void FWebpDecoder::Reset()
 {
 	WebPAnimDecoderReset(Decoder);
+	FrameBuffer = nullptr; 
 }
 
 const FColor* FWebpDecoder::GetFrameBuffer() const
