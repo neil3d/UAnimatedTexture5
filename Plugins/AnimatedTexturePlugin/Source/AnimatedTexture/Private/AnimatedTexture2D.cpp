@@ -71,9 +71,8 @@ void UAnimatedTexture2D::Tick(float DeltaTime)
 	if (FrameTime < FrameDelay)
 		return;
 
-	FrameDelay = RenderFrameToTexture();
 	FrameTime = 0;
-
+	FrameDelay = RenderFrameToTexture();
 }
 
 
@@ -119,7 +118,7 @@ void UAnimatedTexture2D::ImportFile(EAnimatedTextureType InFileType, const uint8
 float UAnimatedTexture2D::RenderFrameToTexture()
 {
 	// decode a new frame to memory buffer
-	int nFrameDelay = Decoder->PlayFrame(DefaultFrameDelay * 1000, bLooping);
+	int nFrameDelay = Decoder->NextFrame(DefaultFrameDelay * 1000, bLooping);
 
 	// copy frame to RHI texture
 	struct FRenderCommandData

@@ -24,7 +24,7 @@ public:
 	/**
 	 * @return frame delay in milliseconds
 	 */
-	virtual uint32 PlayFrame(uint32 DefaultFrameDelay, bool bLooping) = 0;
+	virtual uint32 NextFrame(uint32 DefaultFrameDelay, bool bLooping) = 0;
 	virtual void Reset() = 0;
 
 	virtual uint32 GetWidth() const = 0;

@@ -60,7 +60,7 @@ void FGIFDecoder::Close()
 	mFrameBuffer.Empty();
 }
 
-uint32 FGIFDecoder::PlayFrame(uint32 DefaultFrameDelay, bool bLooping)
+uint32 FGIFDecoder::NextFrame(uint32 DefaultFrameDelay, bool bLooping)
 {
 	if (!mGIF) return DefaultFrameDelay;
 

@@ -68,7 +68,7 @@ void FWebpDecoder::Close()
 	}
 }
 
-uint32 FWebpDecoder::PlayFrame(uint32 DefaultFrameDelay, bool bLooping)
+uint32 FWebpDecoder::NextFrame(uint32 DefaultFrameDelay, bool bLooping)
 {
 	if (Decoder == nullptr)
 		return DefaultFrameDelay;
