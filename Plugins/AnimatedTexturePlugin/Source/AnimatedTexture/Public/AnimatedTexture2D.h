@@ -30,7 +30,7 @@ enum class EAnimatedTextureType : uint8
  * Animated Texutre
  * @see class UTexture2D
  */
-UCLASS()
+UCLASS(BlueprintType, Category = AnimatedTexture)
 class ANIMATEDTEXTURE_API UAnimatedTexture2D : public UTexture, public FTickableGameObject
 {
 	GENERATED_BODY()
