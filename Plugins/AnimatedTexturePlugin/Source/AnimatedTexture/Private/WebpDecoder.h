@@ -12,38 +12,33 @@
 
 #include "CoreMinimal.h"
 #include "AnimatedTextureDecoder.h"
-#include "giflib/gif_lib.h"
+#include "libwebp/src/webp/decode.h"
+#include "libwebp/src/webp/demux.h"
 
-class FAnimatedGIFDecoder : public FAnimatedTextureDecoder
+/**
+* @see https://developers.google.com/speed/webp/docs/api
+*/
+class FWebpDecoder : public FAnimatedTextureDecoder
 {
 public:
-	FAnimatedGIFDecoder() = default;
-	virtual ~FAnimatedGIFDecoder();
+	FWebpDecoder() = default;
+	virtual ~FWebpDecoder();
 
 	virtual bool LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize) override;
 	virtual void Close() override;
-	virtual bool Ready() override { return mGIF != nullptr; }
 
 	virtual uint32 PlayFrame(uint32 DefaultFrameDelay, bool bLooping) override;
 	virtual void Reset() override;
 
-	virtual uint32 GetWidth() const override;
-	virtual uint32 GetHeight() const override;
+	virtual uint32 GetWidth() const override { return Width; }
+	virtual uint32 GetHeight() const override { return Height; }
 	virtual const FColor* GetFrameBuffer() const override;
 
 	virtual uint32 GetDuration(uint32 DefaultFrameDelay) const override;
 	virtual bool SupportsTransparency() const override;
 
 private:
-	void ClearFrameBuffer(ColorMapObject* ColorMap, bool bTransparent);
-	void GCB_Background(int left, int top, int width, int height,
-		ColorMapObject* colorMap, bool bTransparent);
-
-private:
-	int mCurrentFrame = 0;
-	int mLoopCount = 0;
-	bool mDoNotDispose = false;
-
-	GifFileType* mGIF = nullptr;
-	TArray<FColor> mFrameBuffer;
+	int Width = 0;
+	int Height = 0;
+	WebPAnimDecoder* Decoder = nullptr;
 };

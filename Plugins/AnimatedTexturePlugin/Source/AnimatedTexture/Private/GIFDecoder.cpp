@@ -8,10 +8,10 @@
  *
 */
 
-#include "AnimatedGIFDecoder.h"
+#include "GIFDecoder.h"
 #include "AnimatedTextureModule.h"
 
-FAnimatedGIFDecoder::~FAnimatedGIFDecoder()
+FGIFDecoder::~FGIFDecoder()
 {
 	Close();
 }
@@ -24,14 +24,14 @@ static int _GIF_InputFunc(GifFileType* gifFile, GifByteType* buffer, int length)
 	return length;
 }
 
-bool FAnimatedGIFDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize)
+bool FGIFDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize)
 {
 	int gifError = 0;
 	mGIF = DGifOpen((void*)InBuffer, _GIF_InputFunc, &gifError);
 	if (mGIF == nullptr)
 	{
 		FString Error(GifErrorString(gifError));
-		UE_LOG(LogAnimTexture, Error, TEXT("FAnimatedGIFDecoder: GIF file open failed, %s."), *Error);
+		UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: GIF file open failed, %s."), *Error);
 		return false;
 	}
 
@@ -39,7 +39,7 @@ bool FAnimatedGIFDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferS
 	if (gifError != GIF_OK)
 	{
 		FString Error(GifErrorString(gifError));
-		UE_LOG(LogAnimTexture, Error, TEXT("FAnimatedGIFDecoder: GIF file load failed, %s."), *Error);
+		UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: GIF file load failed, %s."), *Error);
 		return false;
 	}
 
@@ -48,7 +48,7 @@ bool FAnimatedGIFDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferS
 	return true;
 }
 
-void FAnimatedGIFDecoder::Close()
+void FGIFDecoder::Close()
 {
 	if (mGIF)
 	{
@@ -60,7 +60,7 @@ void FAnimatedGIFDecoder::Close()
 	mFrameBuffer.Empty();
 }
 
-uint32 FAnimatedGIFDecoder::PlayFrame(uint32 DefaultFrameDelay, bool bLooping)
+uint32 FGIFDecoder::PlayFrame(uint32 DefaultFrameDelay, bool bLooping)
 {
 	if (!mGIF) return DefaultFrameDelay;
 
@@ -163,14 +163,14 @@ uint32 FAnimatedGIFDecoder::PlayFrame(uint32 DefaultFrameDelay, bool bLooping)
 	return delayTime == 0 ? DefaultFrameDelay : delayTime;
 }
 
-void FAnimatedGIFDecoder::Reset()
+void FGIFDecoder::Reset()
 {
 	mCurrentFrame = 0;
 	mLoopCount = 0;
 	mDoNotDispose = false;
 }
 
-uint32 FAnimatedGIFDecoder::GetWidth() const
+uint32 FGIFDecoder::GetWidth() const
 {
 	if (mGIF)
 		return mGIF->SWidth;
@@ -178,7 +178,7 @@ uint32 FAnimatedGIFDecoder::GetWidth() const
 		return 1;
 }
 
-uint32 FAnimatedGIFDecoder::GetHeight() const
+uint32 FGIFDecoder::GetHeight() const
 {
 	if (mGIF)
 		return mGIF->SHeight;
@@ -186,12 +186,12 @@ uint32 FAnimatedGIFDecoder::GetHeight() const
 		return 0;
 }
 
-const FColor* FAnimatedGIFDecoder::GetFrameBuffer() const
+const FColor* FGIFDecoder::GetFrameBuffer() const
 {
 	return mFrameBuffer.GetData();
 }
 
-uint32 FAnimatedGIFDecoder::GetDuration(uint32 DefaultFrameDelay) const
+uint32 FGIFDecoder::GetDuration(uint32 DefaultFrameDelay) const
 {
 	if (!mGIF)
 		return 0;
@@ -217,7 +217,7 @@ uint32 FAnimatedGIFDecoder::GetDuration(uint32 DefaultFrameDelay) const
 	return duration;
 }
 
-bool FAnimatedGIFDecoder::SupportsTransparency() const
+bool FGIFDecoder::SupportsTransparency() const
 {
 	if (!mGIF)
 		return false;
@@ -242,7 +242,7 @@ bool FAnimatedGIFDecoder::SupportsTransparency() const
 	return false;
 }
 
-void FAnimatedGIFDecoder::ClearFrameBuffer(ColorMapObject* ColorMap,
+void FGIFDecoder::ClearFrameBuffer(ColorMapObject* ColorMap,
 	bool bTransparent) 
 {
 	FColor bg = { 0, 0, 0, 255 };
@@ -259,7 +259,7 @@ void FAnimatedGIFDecoder::ClearFrameBuffer(ColorMapObject* ColorMap,
 	for (auto& pixel : mFrameBuffer) pixel = bg;
 }
 
-void FAnimatedGIFDecoder::GCB_Background(int left, int top, int width, int height,
+void FGIFDecoder::GCB_Background(int left, int top, int width, int height,
 	ColorMapObject* colorMap,
 	bool bTransparent)
 {

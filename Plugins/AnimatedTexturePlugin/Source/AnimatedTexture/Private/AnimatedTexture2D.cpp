@@ -11,7 +11,8 @@
 
 #include "AnimatedTexture2D.h"
 #include "AnimatedTextureResource.h"
-#include "AnimatedGIFDecoder.h"
+#include "GIFDecoder.h"
+#include "WebpDecoder.h"
 
 float UAnimatedTexture2D::GetSurfaceWidth() const
 {
@@ -35,12 +36,10 @@ FTextureResource* UAnimatedTexture2D::CreateResource()
 	switch (FileType)
 	{
 	case EAnimatedTextureType::Gif:
-		Decoder = MakeShared<FAnimatedGIFDecoder, ESPMode::ThreadSafe>();
+		Decoder = MakeShared<FGIFDecoder, ESPMode::ThreadSafe>();
 		break;
 	case EAnimatedTextureType::Webp:
-		// TODO
-		break;
-	default:
+		Decoder = MakeShared<FWebpDecoder, ESPMode::ThreadSafe>();
 		break;
 	}
 

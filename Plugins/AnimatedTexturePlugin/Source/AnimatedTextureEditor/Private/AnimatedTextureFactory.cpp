@@ -24,6 +24,7 @@ UAnimatedTextureFactory::UAnimatedTextureFactory(const FObjectInitializer& Objec
 	bEditAfterNew = true;
 	SupportedClass = UAnimatedTexture2D::StaticClass();
 	Formats.Add(TEXT("gif;GIF(Animation Supported)"));
+	Formats.Add(TEXT("webp;Webp(Animation Supported)"));
 
 	// Required to checkbefore UReimportTextureFactory
 	ImportPriority = DefaultImportPriority + 1;
@@ -33,7 +34,8 @@ bool UAnimatedTextureFactory::FactoryCanImport(const FString& Filename)
 {
 	FString Extension = FPaths::GetExtension(Filename, true);
 
-	return Extension.Compare(TEXT(".gif"), ESearchCase::IgnoreCase) == 0;
+	return Extension.Compare(TEXT(".gif"), ESearchCase::IgnoreCase) == 0
+		|| Extension.Compare(TEXT(".webp"), ESearchCase::IgnoreCase) == 0;
 }
 
 UObject* UAnimatedTextureFactory::FactoryCreateBinary(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, const TCHAR* Type, const uint8*& Buffer, const uint8* BufferEnd, FFeedbackContext* Warn)
