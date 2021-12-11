@@ -19,7 +19,7 @@ FWebpDecoder::~FWebpDecoder()
 bool FWebpDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize)
 {
 	// get image width height
-	int ret = WebPGetInfo(InBuffer, InBufferSize, &Width, &Height);
+	int ret = WebPGetFeatures(InBuffer, InBufferSize, &Features);
 	if (ret != VP8_STATUS_OK)
 	{
 		UE_LOG(LogAnimTexture, Error, TEXT("FWebpDecoder: Get Webp info failed, %d."), ret);
@@ -28,7 +28,7 @@ bool FWebpDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize)
 
 	// create WebPAnimDecoder
 	WebPAnimDecoderOptions opt;
-	memset(&opt, 0, sizeof(opt));
+	WebPAnimDecoderOptionsInit(&opt);
 	opt.color_mode = MODE_BGRA;
 	opt.use_threads = 0;
 
@@ -41,11 +41,19 @@ bool FWebpDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize)
 	}
 
 	// get anim info
-	WebPAnimInfo AnimInfo;
 	if (!WebPAnimDecoderGetInfo(Decoder, &AnimInfo)) {
 		UE_LOG(LogAnimTexture, Error, TEXT("FWebpDecoder: Error getting global info about the animation."));
 		return false;
 	}
+
+	// TODO
+	int Timestamp = 0;
+	uint8* Buffer = nullptr;
+	while (WebPAnimDecoderHasMoreFrames(Decoder)) {
+		WebPAnimDecoderGetNext(Decoder, &Buffer, &Timestamp);
+	}
+	WebPAnimDecoderReset(Decoder);
+	Duration = Timestamp;
 
 	return true;
 }
@@ -61,27 +69,49 @@ void FWebpDecoder::Close()
 
 uint32 FWebpDecoder::PlayFrame(uint32 DefaultFrameDelay, bool bLooping)
 {
-	return 0;
+	if (Decoder == nullptr)
+		return DefaultFrameDelay;
+
+	// restart
+	if (!WebPAnimDecoderHasMoreFrames(Decoder))
+	{
+		if (bLooping)
+			WebPAnimDecoderReset(Decoder);
+		else
+			return DefaultFrameDelay;
+	}
+
+	// decode next frame
+	int Timestamp = 0;
+	if (!WebPAnimDecoderGetNext(Decoder, &FrameBuffer, &Timestamp))
+	{
+		UE_LOG(LogAnimTexture, Error, TEXT("FWebpDecoder: Error decoding frame."));
+	}
+
+	// frame duration
+	int FrameDuration = Timestamp - PrevFrameTimestamp;
+	PrevFrameTimestamp = Timestamp;
+	return FrameDuration;
 }
 
 void FWebpDecoder::Reset()
 {
+	WebPAnimDecoderReset(Decoder);
 }
 
 const FColor* FWebpDecoder::GetFrameBuffer() const
 {
-	return nullptr;
+	return (FColor*)FrameBuffer;
 }
 
 uint32 FWebpDecoder::GetDuration(uint32 DefaultFrameDelay) const
 {
-	return 0;
+	return Duration;
 }
 
 bool FWebpDecoder::SupportsTransparency() const
 {
-
-	return false;
+	return Features.has_alpha != 0;
 }
 
 

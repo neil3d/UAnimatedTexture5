@@ -30,15 +30,20 @@ public:
 	virtual uint32 PlayFrame(uint32 DefaultFrameDelay, bool bLooping) override;
 	virtual void Reset() override;
 
-	virtual uint32 GetWidth() const override { return Width; }
-	virtual uint32 GetHeight() const override { return Height; }
+	virtual uint32 GetWidth() const override { return AnimInfo.canvas_width; }
+	virtual uint32 GetHeight() const override { return AnimInfo.canvas_height; }
 	virtual const FColor* GetFrameBuffer() const override;
 
 	virtual uint32 GetDuration(uint32 DefaultFrameDelay) const override;
 	virtual bool SupportsTransparency() const override;
 
 private:
-	int Width = 0;
-	int Height = 0;
+	int PrevFrameTimestamp = 0;
+	uint32 Duration = 0;
+
+	WebPAnimInfo AnimInfo;
+	WebPBitstreamFeatures Features;
+
+	uint8* FrameBuffer = nullptr;
 	WebPAnimDecoder* Decoder = nullptr;
 };

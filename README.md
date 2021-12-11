@@ -3,7 +3,7 @@
 ----
 This plugin allows you to import animated pictures into your Unreal Engine 5 project as a new AnimatedTexture asset type.
 - [x] Support .GIF files
-- [ ] Supprts .Webp files
+- [x] Support .Webp files
 
 ![DEMO](./Docs/images/demo.png)
 
