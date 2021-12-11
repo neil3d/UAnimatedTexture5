@@ -39,6 +39,10 @@ public class AnimatedTextureEditor : ModuleRules
                 "CoreUObject",
                 "Engine",
 				// ... add private dependencies that you statically link with here ...	
+                "RHI",
+                "RenderCore",
+                "UnrealEd",
+                "AnimatedTexture"
 			}
             );
 
