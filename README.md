@@ -17,9 +17,9 @@ This plugin allows you to import animated pictures into your Unreal Engine 5 pro
 
 ## Compatibility
 
-The plugin should work on all platforms the Unreal Engine 5 supports, but it has not been tested on every platform.
+The plugin should work on all platforms the Unreal Engine 5 supports, but only been tested on the following platform:
 - [x] Windows 64
-- [ ] MacOS
+- [x] MacOS
 
 ## Screenshots
 
