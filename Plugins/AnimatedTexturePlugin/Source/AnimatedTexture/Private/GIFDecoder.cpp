@@ -107,7 +107,7 @@ uint32 FGIFDecoder::NextFrame(uint32 DefaultFrameDelay, bool bLooping)
 					// Restore to previous. The decoder is required to restore the area
 					// overwritten by the graphic with what was there prior to rendering
 					// the graphic.
-					std::cout << "DISPOSE_PREVIOUS" << std::endl;
+					//std::cout << "DISPOSE_PREVIOUS" << std::endl;
 					break;
 				}// end of switch
 			}
