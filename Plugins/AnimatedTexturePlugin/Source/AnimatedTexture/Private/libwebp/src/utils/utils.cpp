@@ -11,13 +11,16 @@
 //
 // Author: Skal (pascal.massimino@gmail.com)
 
+#include "src/utils/utils.h"
+
 #include <stdlib.h>
 #include <string.h>  // for memcpy()
 #include "src/webp/decode.h"
 #include "src/webp/encode.h"
 #include "src/webp/format_constants.h"  // for MAX_PALETTE_SIZE
 #include "src/utils/color_cache_utils.h"
-#include "src/utils/utils.h"
+
+#include "HAL/UnrealMemory.h" // for FMemory functionality
 
 // If PRINT_MEM_INFO is defined, extra info (like total memory used, number of
 // alloc/free etc) is printed. For debugging/tuning purpose only (it's slow,
@@ -84,7 +87,7 @@ static void PrintMemInfo(void) {
   while (all_blocks != NULL) {
     MemBlock* b = all_blocks;
     all_blocks = b->next_;
-    free(b);
+    FMemory::Free(b);
   }
 }
 
@@ -119,7 +122,7 @@ static void Increment(int* const v) {
 
 static void AddMem(void* ptr, size_t size) {
   if (ptr != NULL) {
-    MemBlock* const b = (MemBlock*)malloc(sizeof(*b));
+    MemBlock* const b = (MemBlock*)FMemory::Malloc(sizeof(*b));
     if (b == NULL) abort();
     b->next_ = all_blocks;
     all_blocks = b;
@@ -156,7 +159,7 @@ static void SubMem(void* ptr) {
       fprintf(stderr, "Mem: %u (-%u)\n",
               (uint32_t)total_mem, (uint32_t)block->size_);
 #endif
-      free(block);
+      FMemory::Free(block);
     }
   }
 }
@@ -196,7 +199,7 @@ void* WebPSafeMalloc(uint64_t nmemb, size_t size) {
   Increment(&num_malloc_calls);
   if (!CheckSizeArgumentsOverflow(nmemb, size)) return NULL;
   assert(nmemb * size > 0);
-  ptr = malloc((size_t)(nmemb * size));
+  ptr = FMemory::Malloc((size_t)(nmemb * size));
   AddMem(ptr, (size_t)(nmemb * size));
   return ptr;
 }
@@ -206,7 +209,7 @@ void* WebPSafeCalloc(uint64_t nmemb, size_t size) {
   Increment(&num_calloc_calls);
   if (!CheckSizeArgumentsOverflow(nmemb, size)) return NULL;
   assert(nmemb * size > 0);
-  ptr = calloc((size_t)nmemb, size);
+  ptr = FMemory::MallocZeroed((size_t)nmemb * size);
   AddMem(ptr, (size_t)(nmemb * size));
   return ptr;
 }
@@ -216,7 +219,7 @@ void WebPSafeFree(void* const ptr) {
     Increment(&num_free_calls);
     SubMem(ptr);
   }
-  free(ptr);
+  FMemory::Free(ptr);
 }
 
 // Public API functions.
