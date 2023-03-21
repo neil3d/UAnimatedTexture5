@@ -87,6 +87,7 @@ public:	// UTexture Interface
 	virtual float GetSurfaceHeight() const override;
 	virtual float GetSurfaceDepth() const override { return 0; }
 	virtual uint32 GetSurfaceArraySize() const override { return 0; }
+	virtual ETextureClass GetTextureClass() const override { return ETextureClass::TwoDDynamic; }
 
 	virtual FTextureResource* CreateResource() override;
 	virtual EMaterialValueType GetMaterialType() const override { return MCT_Texture2D; }
