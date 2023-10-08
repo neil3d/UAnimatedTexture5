@@ -46,7 +46,7 @@ static ESamplerAddressMode _ConvertAddressMode(enum TextureAddress addr)
 	return ret;
 }
 
-void FAnimatedTextureResource::InitRHI()
+void FAnimatedTextureResource::InitRHI(FRHICommandListBase& RHICmdList)
 {
 	// Create the sampler state RHI resource.
 	ESamplerAddressMode AddressU = _ConvertAddressMode(Owner->AddressX);
@@ -73,8 +73,7 @@ void FAnimatedTextureResource::InitRHI()
 
 	uint32 NumMips = 1;
 	FString Name = Owner->GetName();
-	FRHIResourceCreateInfo CreateInfo(*Name);
-	TextureRHI = RHICreateTexture2D(GetSizeX(), GetSizeY(), PF_B8G8R8A8, NumMips, 1, Flags, CreateInfo);
+	TextureRHI = RHICreateTexture(FRHITextureCreateDesc::Create2D(*Name, GetSizeX(), GetSizeY(), PF_B8G8R8A8).SetNumMips(NumMips).SetNumSamples(1).SetFlags(Flags));
 	TextureRHI->SetName(Owner->GetFName());
 	RHIUpdateTextureReference(Owner->TextureReference.TextureReferenceRHI, TextureRHI);
 }
