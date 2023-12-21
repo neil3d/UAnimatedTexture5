@@ -29,6 +29,10 @@ public class AnimatedTexture : ModuleRules
 				"Core",
 				// ... add other public dependencies that you statically link with here ...
 				"Engine",
+                "Slate",
+                "SlateCore",
+                 "UMG",
+				 "HTTP"
 			}
 			);
 			

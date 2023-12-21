@@ -35,7 +35,7 @@ void UAnimatedTextureThumbnailRenderer::GetThumbnailSize(UObject* Object, float 
 void UAnimatedTextureThumbnailRenderer::Draw(UObject* Object, int32 X, int32 Y, uint32 Width, uint32 Height, FRenderTarget* Viewport, FCanvas* Canvas, bool bAdditionalViewFamily)
 {
 	UAnimatedTexture2D* Texture = Cast<UAnimatedTexture2D>(Object);
-	if (Texture != nullptr && Texture->Resource != nullptr)
+	if (Texture != nullptr && Texture->GetResource() != nullptr)
 	{
 		if (Texture->SupportsTransparency)
 		{
@@ -45,11 +45,11 @@ void UAnimatedTextureThumbnailRenderer::Draw(UObject* Object, int32 X, int32 Y, 
 			Canvas->DrawTile(
 				0.0f, 0.0f, Width, Height,							// Dimensions
 				0.0f, 0.0f, CheckerDensity, CheckerDensity,			// UVs
-				FLinearColor::White, Checker->Resource);			// Tint & Texture
+				FLinearColor::White, Checker->GetResource());			// Tint & Texture
 		}
 
 		// Use A canvas tile item to draw
-		FCanvasTileItem CanvasTile(FVector2D(X, Y), Texture->Resource, FVector2D(Width, Height), FLinearColor::White);
+		FCanvasTileItem CanvasTile(FVector2D(X, Y), Texture->GetResource(), FVector2D(Width, Height), FLinearColor::White);
 		CanvasTile.BlendMode = Texture->SupportsTransparency ? SE_BLEND_Translucent : SE_BLEND_Opaque;
 		CanvasTile.Draw(Canvas);
 	}// end of if(texture is valid)

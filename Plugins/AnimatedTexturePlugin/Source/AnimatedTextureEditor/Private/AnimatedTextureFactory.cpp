@@ -11,11 +11,11 @@
 #include "AnimatedTextureFactory.h"
 #include "AnimatedTextureEditorModule.h"
 #include "AnimatedTexture2D.h"
-#include "TextureReferenceResolver.h"
 
 #include "Subsystems/ImportSubsystem.h"	// UnrealEd
 #include "EditorFramework/AssetImportData.h"	// Engine
 #include "Editor.h"	// UnrealEd
+#include "TextureReferenceResolver.h"
 
 UAnimatedTextureFactory::UAnimatedTextureFactory(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)

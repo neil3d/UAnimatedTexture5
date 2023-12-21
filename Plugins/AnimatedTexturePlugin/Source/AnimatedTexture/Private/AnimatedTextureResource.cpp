@@ -73,6 +73,23 @@ void FAnimatedTextureResource::InitRHI(FRHICommandListBase& RHICmdList)
 
 	uint32 NumMips = 1;
 	FString Name = Owner->GetName();
+	//FRHIResourceCreateInfo CreateInfo(*Name);
+
+	/*FRHITextureCreateDesc CreateDesc = FRHITextureCreateDesc::Create2D(*Name)
+		.SetExtent((int32)GetSizeX(), (int32)GetSizeY())
+		.SetFormat((EPixelFormat)PF_B8G8R8A8)
+		.SetNumMips((uint8)NumMips)
+		.SetNumSamples((uint8)1)
+		.SetFlags(Flags)
+		.SetInitialState(ERHIAccess::Unknown)
+		.SetExtData(0)
+		.SetBulkData(nullptr)
+		.SetGPUMask(FRHIGPUMask::All())
+		.SetClearValue(FClearValueBinding(FLinearColor::Transparent));
+	TextureRHI = RHICreateTexture(CreateDesc);*/
+
+	//TextureRHI = RHICreateTexture2D(GetSizeX(), GetSizeY(), PF_B8G8R8A8, NumMips, 1, Flags, CreateInfo);
+
 	TextureRHI = RHICreateTexture(FRHITextureCreateDesc::Create2D(*Name, GetSizeX(), GetSizeY(), PF_B8G8R8A8).SetNumMips(NumMips).SetNumSamples(1).SetFlags(Flags));
 	TextureRHI->SetName(Owner->GetFName());
 	RHIUpdateTextureReference(Owner->TextureReference.TextureReferenceRHI, TextureRHI);

@@ -16,6 +16,7 @@
 #include "AnimatedTexture2D.generated.h"
 
 class FAnimatedTextureDecoder;
+class UImage;
 
 UENUM()
 enum class EAnimatedTextureType : uint8
@@ -25,6 +26,7 @@ enum class EAnimatedTextureType : uint8
 	Webp
 };
 
+DECLARE_DELEGATE_OneParam(FAsyncGifTextureFormLocalDelegate, UAnimatedTexture2D*);
 
 /**
  * Animated Texutre
@@ -64,33 +66,39 @@ public:	// Playback APIs
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
 		void Stop();
 
-	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
+	UFUNCTION(BlueprintPure, Category = AnimatedTexture)
 		bool IsPlaying() const { return bPlaying; }
 
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
 		void SetLooping(bool bNewLooping) { bLooping = bNewLooping; }
 
-	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
+	UFUNCTION(BlueprintPure, Category = AnimatedTexture)
 		bool IsLooping() const { return bLooping; }
 
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
 		void SetPlayRate(float NewRate) { PlayRate = NewRate; }
 
-	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
+	UFUNCTION(BlueprintPure, Category = AnimatedTexture)
 		float GetPlayRate() const { return PlayRate; }
 
-	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
+	UFUNCTION(BlueprintPure, Category = AnimatedTexture)
 		float GetAnimationLength() const;
+
+	UFUNCTION(BlueprintPure, Category = AnimatedTexture)
+	FVector2D GetGifSize() { return GifSize; };
+
+	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
+	bool NonzeroSize();
 
 public:	// UTexture Interface
 	virtual float GetSurfaceWidth() const override;
 	virtual float GetSurfaceHeight() const override;
 	virtual float GetSurfaceDepth() const override { return 0; }
 	virtual uint32 GetSurfaceArraySize() const override { return 0; }
-	virtual ETextureClass GetTextureClass() const override { return ETextureClass::TwoDDynamic; }
 
 	virtual FTextureResource* CreateResource() override;
 	virtual EMaterialValueType GetMaterialType() const override { return MCT_Texture2D; }
+	virtual ETextureClass GetTextureClass() const override { return ETextureClass::TwoDDynamic; }
 
 public:	// FTickableGameObject Interface
 	virtual void Tick(float DeltaTime) override;
@@ -121,6 +129,40 @@ public: // Internal APIs
 
 	float RenderFrameToTexture();
 
+public:
+	//************************************
+	// Method:    LoadAnimatedTexture2D runtime模式下读取gif
+	// FullName:  UAnimatedTexture2D::LoadAnimatedTexture2D
+	// Access:    public static 
+	// Returns:   UAnimatedTexture2D*
+	// Qualifier:
+	// Parameter: FString FilePath gif路径
+	//************************************
+	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
+	static UAnimatedTexture2D* LoadAnimatedTexture2D(FString FilePath);
+
+	static void AsyncLoadLocalGif(const FString& URL, FAsyncGifTextureFormLocalDelegate LocalDelegate = FAsyncGifTextureFormLocalDelegate());
+
+	static UAnimatedTexture2D* DownLoadAnimatedTexture2D(EAnimatedTextureType FileType, const uint8* Buffer, uint32 BufferSize);
+
+
+	//************************************
+	// Method:    CanDecoderGif 是否可以解密gif文件
+	// FullName:  UAnimatedTexture2D::CanDecoderGif
+	// Access:    public static 
+	// Returns:   bool
+	// Qualifier:
+	// Parameter: EAnimatedTextureType InFileType
+	// Parameter: const uint8 * InBuffer
+	// Parameter: uint32 InBufferSize
+	//************************************
+	static bool CanDecoderGif(EAnimatedTextureType InFileType, const uint8* InBuffer, uint32 InBufferSize, TSharedPtr<FAnimatedTextureDecoder, ESPMode::ThreadSafe>& Decoder);
+
+	void CreateTransient(EAnimatedTextureType InFileType, const uint8* InBuffer, uint32 InBufferSize, TSharedPtr<FAnimatedTextureDecoder, ESPMode::ThreadSafe> Decoder);
+
+	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
+	static void SetBrushFromAnimatedTexture2D(UImage* Target, UAnimatedTexture2D* AnimatedTexture, bool bMatchSize);
+
 private:
 	UPROPERTY()
 		EAnimatedTextureType FileType = EAnimatedTextureType::None;
@@ -135,4 +177,5 @@ private:
 	float FrameDelay = 0.0f;
 	float FrameTime = 0.0f;
 	bool bPlaying = true;
+	FVector2D GifSize;
 };
