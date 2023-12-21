@@ -13,7 +13,7 @@ This plugin allows you to import animated pictures into your Unreal Engine 5 pro
 - [x] Editing in default Texture Editor
 - [x] Supports UMG Image widget, Material and Material Instance
 - [x] Animation playback APIs
-- [ ] Runtime load GIF/Webp file from disk or download from web
+- [x] Runtime load GIF/Webp file from disk or download from web
 
 ## Compatibility
 
@@ -29,4 +29,5 @@ The plugin should work on all platforms the Unreal Engine 5 supports, but only b
 
 ![Playback API DEMO](./Docs/images/api.png)
 
+![Runtime Load Gif](./Docs/images/runtime.png)
 
