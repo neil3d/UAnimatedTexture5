@@ -8,7 +8,7 @@ public class UAnimatedTexture5Target : TargetRules
 	public UAnimatedTexture5Target( TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
-		DefaultBuildSettings = BuildSettingsVersion.V2;
+		DefaultBuildSettings = BuildSettingsVersion.Latest;
 		ExtraModuleNames.AddRange( new string[] { "AnimatedTextureDemo" } );
 	}
 }
