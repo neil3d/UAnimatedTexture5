@@ -17,6 +17,17 @@
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
 
+UAsyncLoadAnimatedTextureFromFile::UAsyncLoadAnimatedTextureFromFile(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	// 参考引擎 UAsyncTaskDownloadImage 的做法：在对象创建时即 AddToRoot，
+	// 避免 NewObject -> Activate 之间的窗口期被 GC。CDO 需要跳过。
+	if (HasAnyFlags(RF_ClassDefaultObject) == false)
+	{
+		AddToRoot();
+	}
+}
+
 UAsyncLoadAnimatedTextureFromFile* UAsyncLoadAnimatedTextureFromFile::LoadAnimatedTextureFromFileAsync(
 	UObject* WorldContextObject, const FString& FilePath)
 {
@@ -28,9 +39,7 @@ UAsyncLoadAnimatedTextureFromFile* UAsyncLoadAnimatedTextureFromFile::LoadAnimat
 
 void UAsyncLoadAnimatedTextureFromFile::Activate()
 {
-	// 使节点对象在异步期间不被 GC 回收；结束时 RemoveFromRoot。
-	AddToRoot();
-
+	// 生命周期说明：AddToRoot 已在构造函数中完成；此处仅负责启动异步任务。
 	TWeakObjectPtr<UAsyncLoadAnimatedTextureFromFile> WeakThis(this);
 	const FString Path = FilePathCached;
 

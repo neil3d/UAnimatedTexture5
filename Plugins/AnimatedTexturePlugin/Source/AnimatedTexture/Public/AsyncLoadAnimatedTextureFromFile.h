@@ -40,6 +40,12 @@ class ANIMATEDTEXTURE_API UAsyncLoadAnimatedTextureFromFile : public UBlueprintA
 	GENERATED_BODY()
 
 public:
+	/**
+	 * 构造函数：在对象创建时即 AddToRoot，避免 NewObject -> Activate 之间的窗口期被 GC。
+	 * 对 CDO 跳过 AddToRoot（参考引擎 UAsyncTaskDownloadImage 的做法）。
+	 */
+	UAsyncLoadAnimatedTextureFromFile(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	UPROPERTY(BlueprintAssignable)
 	FAnimatedTextureLoadFileResult OnSuccess;
 
