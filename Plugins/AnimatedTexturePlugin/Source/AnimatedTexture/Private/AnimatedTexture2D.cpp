@@ -129,7 +129,7 @@ float UAnimatedTexture2D::RenderFrameToTexture()
 
 	typedef TSharedPtr<FRenderCommandData, ESPMode::ThreadSafe> FCommandDataPtr;
 	FCommandDataPtr CommandData = MakeShared<FRenderCommandData, ESPMode::ThreadSafe>();
-	CommandData->RHIResource = Resource;
+	CommandData->RHIResource = GetResource();
 	CommandData->FrameBuffer = (const uint8*)(Decoder->GetFrameBuffer());
 
 	//-- equeue render command
