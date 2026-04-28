@@ -123,4 +123,47 @@ inline void AT_UpdateTextureReference(
 	RHIUpdateTextureReference(TextureRef, NewTexture);
 }
 
+/**
+ * 将帧像素数据上传到 GPU 纹理的高层兼容性封装
+ *
+ * 该函数封装了从 FRHITexture 获取纹理尺寸、构建更新区域、上传像素数据的完整流程，
+ * 内部通过条件编译处理不同引擎版本的 RHI API 差异：
+ *   - UE 5.7+：FRHITexture2D 子类型已移除，直接使用 FRHITexture* 操作
+ *   - UE 5.3~5.6：通过 GetTexture2D() 获取 FTexture2DRHIRef 后操作
+ *
+ * @param RHICmdList - RHI 命令列表（Immediate）
+ * @param TextureRHI - 目标纹理 RHI 指针（调用方需确保非空）
+ * @param SrcData - 帧像素数据指针（BGRA 格式，大小应匹配纹理尺寸）
+ * @return 操作是否成功（纹理无效时返回 false）
+ */
+inline bool AT_UpdateFrameToTexture(
+	FRHICommandListImmediate& RHICmdList,
+	FRHITexture* TextureRHI,
+	const uint8* SrcData)
+{
+#if AT_UE_VERSION_GE(5, 7)
+	// UE 5.7+ : FRHITexture2D 子类型已移除，直接使用统一的 FRHITexture*
+	uint32 TexWidth = TextureRHI->GetSizeX();
+	uint32 TexHeight = TextureRHI->GetSizeY();
+#else
+	// UE 5.3~5.6 : 通过 GetTexture2D() 获取特化类型并验证
+	FTexture2DRHIRef Texture2DRHI = TextureRHI->GetTexture2D();
+	if (!Texture2DRHI)
+		return false;
+
+	uint32 TexWidth = Texture2DRHI->GetSizeX();
+	uint32 TexHeight = Texture2DRHI->GetSizeY();
+#endif
+
+	uint32 SrcPitch = TexWidth * sizeof(FColor);
+
+	FUpdateTextureRegion2D Region;
+	Region.SrcX = Region.SrcY = Region.DestX = Region.DestY = 0;
+	Region.Width = TexWidth;
+	Region.Height = TexHeight;
+
+	AT_UpdateTexture2D(RHICmdList, TextureRHI, 0, Region, SrcPitch, SrcData);
+	return true;
+}
+
 } // namespace AnimatedTextureCompat

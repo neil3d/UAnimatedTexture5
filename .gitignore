@@ -75,3 +75,4 @@ DerivedDataCache/*
 
 .idea/*
 .codebuddy/*
+*/__pycache__/*

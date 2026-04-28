@@ -155,20 +155,7 @@ float UAnimatedTexture2D::RenderFrameToTexture()
 			if (!CommandData->RHIResource || !CommandData->RHIResource->TextureRHI)
 				return;
 
-			FTexture2DRHIRef Texture2DRHI = CommandData->RHIResource->TextureRHI->GetTexture2D();
-			if (!Texture2DRHI)
-				return;
-
-			uint32 TexWidth = Texture2DRHI->GetSizeX();
-			uint32 TexHeight = Texture2DRHI->GetSizeY();
-			uint32 SrcPitch = TexWidth * sizeof(FColor);
-
-			FUpdateTextureRegion2D Region;
-			Region.SrcX = Region.SrcY = Region.DestX = Region.DestY = 0;
-			Region.Width = TexWidth;
-			Region.Height = TexHeight;
-
-			AnimatedTextureCompat::AT_UpdateTexture2D(RHICmdList, Texture2DRHI, 0, Region, SrcPitch, CommandData->FrameBufferCopy.GetData());
+			AnimatedTextureCompat::AT_UpdateFrameToTexture(RHICmdList, CommandData->RHIResource->TextureRHI, CommandData->FrameBufferCopy.GetData());
 		});
 
 	return nFrameDelay / 1000.0f;

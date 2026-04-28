@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 2,
-	"VersionName": "0.6.0",
+	"VersionName": "1.0.0",
 	"FriendlyName": "AnimatedTexturePlugin",
 	"Description": "Import Animated GIF as a new AnimtedTexture asset type",
 	"Category": "Rendering",
