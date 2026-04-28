@@ -10,6 +10,7 @@
 
 #include "AnimatedTextureResource.h"
 #include "AnimatedTexture2D.h"
+#include "AnimatedTextureCompat.h"
 
 #include "DeviceProfiles/DeviceProfile.h"	// Engine
 #include "DeviceProfiles/DeviceProfileManager.h"	// Engine
@@ -28,34 +29,40 @@ uint32 FAnimatedTextureResource::GetSizeY() const
 	return Owner->GetSurfaceHeight();
 }
 
-static ESamplerAddressMode _ConvertAddressMode(enum TextureAddress addr)
+static ESamplerAddressMode ConvertAddressMode(const enum TextureAddress Addr)
 {
-	ESamplerAddressMode ret = AM_Wrap;
-	switch (addr)
+	ESamplerAddressMode Ret = AM_Wrap;
+	switch (Addr)
 	{
 	case TA_Wrap:
-		ret = AM_Wrap;
+		Ret = AM_Wrap;
 		break;
 	case TA_Clamp:
-		ret = AM_Clamp;
+		Ret = AM_Clamp;
 		break;
 	case TA_Mirror:
-		ret = AM_Mirror;
+		Ret = AM_Mirror;
 		break;
 	}
-	return ret;
+	return Ret;
 }
 
 void FAnimatedTextureResource::InitRHI(FRHICommandListBase& RHICmdList)
 {
-	// Create the sampler state RHI resource.
-	ESamplerAddressMode AddressU = _ConvertAddressMode(Owner->AddressX);
-	ESamplerAddressMode AddressV = _ConvertAddressMode(Owner->AddressY);
-	ESamplerAddressMode AddressW = AM_Wrap;
+	if (!Owner)
+	{
+		return;
+	}
 
-	FSamplerStateInitializerRHI SamplerStateInitializer
+	// Create the sampler state RHI resource.
+	const ESamplerAddressMode AddressU = ConvertAddressMode(Owner->AddressX);
+	const ESamplerAddressMode AddressV = ConvertAddressMode(Owner->AddressY);
+	constexpr ESamplerAddressMode AddressW = AM_Wrap;
+
+	const FSamplerStateInitializerRHI SamplerStateInitializer
 	(
-		(ESamplerFilter)UDeviceProfileManager::Get().GetActiveProfile()->GetTextureLODSettings()->GetSamplerFilter(Owner),
+		static_cast<ESamplerFilter>(UDeviceProfileManager::Get().GetActiveProfile()->GetTextureLODSettings()->
+		                                                         GetSamplerFilter(Owner)),
 		AddressU,
 		AddressV,
 		AddressW
@@ -71,47 +78,18 @@ void FAnimatedTextureResource::InitRHI(FRHICommandListBase& RHICmdList)
 	if (Owner->bNoTiling)
 		Flags |= TexCreate_NoTiling;
 
-	uint32 NumMips = 1;
-	FString Name = Owner->GetName();
-	TextureRHI = RHICreateTexture(FRHITextureCreateDesc::Create2D(*Name, GetSizeX(), GetSizeY(), PF_B8G8R8A8).SetNumMips(NumMips).SetNumSamples(1).SetFlags(Flags));
+	constexpr uint32 NumMips = 1;
+	const FString Name = Owner->GetName();
+	TextureRHI = AnimatedTextureCompat::AT_CreateTexture2D(RHICmdList, *Name, GetSizeX(), GetSizeY(), PF_B8G8R8A8, NumMips, 1, Flags);
 	TextureRHI->SetName(Owner->GetFName());
-	RHIUpdateTextureReference(Owner->TextureReference.TextureReferenceRHI, TextureRHI);
+	AnimatedTextureCompat::AT_UpdateTextureReference(Owner->TextureReference.TextureReferenceRHI, TextureRHI);
 }
 
 void FAnimatedTextureResource::ReleaseRHI()
 {
-	RHIUpdateTextureReference(Owner->TextureReference.TextureReferenceRHI, nullptr);
+	if (Owner)
+	{
+		AnimatedTextureCompat::AT_UpdateTextureReference(Owner->TextureReference.TextureReferenceRHI, nullptr);
+	}
 	FTextureResource::ReleaseRHI();
-}
-
-int32 FAnimatedTextureResource::GetDefaultMipMapBias() const
-{
-	return 0;
-}
-
-void FAnimatedTextureResource::CreateSamplerStates(float MipMapBias)
-{
-	FSamplerStateInitializerRHI SamplerStateInitializer
-	(
-		SF_Bilinear,
-		Owner->AddressX == TA_Wrap ? AM_Wrap : (Owner->AddressX == TA_Clamp ? AM_Clamp : AM_Mirror),
-		Owner->AddressY == TA_Wrap ? AM_Wrap : (Owner->AddressY == TA_Clamp ? AM_Clamp : AM_Mirror),
-		AM_Wrap,
-		MipMapBias
-	);
-	SamplerStateRHI = RHICreateSamplerState(SamplerStateInitializer);
-
-	FSamplerStateInitializerRHI DeferredPassSamplerStateInitializer
-	(
-		SF_Bilinear,
-		Owner->AddressX == TA_Wrap ? AM_Wrap : (Owner->AddressX == TA_Clamp ? AM_Clamp : AM_Mirror),
-		Owner->AddressY == TA_Wrap ? AM_Wrap : (Owner->AddressY == TA_Clamp ? AM_Clamp : AM_Mirror),
-		AM_Wrap,
-		MipMapBias,
-		1,
-		0,
-		2
-	);
-
-	DeferredPassSamplerStateRHI = RHICreateSamplerState(DeferredPassSamplerStateInitializer);
 }

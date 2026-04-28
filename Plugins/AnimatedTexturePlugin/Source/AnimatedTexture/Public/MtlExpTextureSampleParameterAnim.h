@@ -27,8 +27,10 @@ class ANIMATEDTEXTURE_API UMtlExpTextureSampleParameterAnim : public UMaterialEx
 	//~ End UMaterialExpression Interface
 
 	//~ Begin UMaterialExpressionTextureSampleParameter Interface
-	virtual bool TextureIsValid(UTexture* InTexture, FString& OutMessage);
-	virtual void SetDefaultTexture();
+#if WITH_EDITOR
+	virtual bool TextureIsValid(UTexture* InTexture, FString& OutMessage) override;
+	virtual void SetDefaultTexture() override;
+#endif // WITH_EDITOR
 	//~ End UMaterialExpressionTextureSampleParameter Interface
 	
 };

@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "0.5.0",
+	"Version": 2,
+	"VersionName": "1.0.0",
 	"FriendlyName": "AnimatedTexturePlugin",
 	"Description": "Import Animated GIF as a new AnimtedTexture asset type",
 	"Category": "Rendering",
@@ -18,20 +18,12 @@
 		{
 			"Name": "AnimatedTexture",
 			"Type": "Runtime",
-			"LoadingPhase": "Default",
-			"WhitelistPlatforms": [
-				"Mac",
-				"Win64"
-			]
+			"LoadingPhase": "Default"
 		},
 		{
 			"Name": "AnimatedTextureEditor",
 			"Type": "Editor",
-			"LoadingPhase": "Default",
-			"WhitelistPlatforms": [
-				"Mac",
-				"Win64"
-			]
+			"LoadingPhase": "Default"
 		}
 	]
 }
