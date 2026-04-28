@@ -121,15 +121,39 @@ uint32 FGIFDecoder::NextFrame(uint32 DefaultFrameDelay, bool bLooping)
 			transparentColor != NO_TRANSPARENT_COLOR);
 	}
 
-	// decode current image to frame buffer
-	for (int y = id.Top; y < id.Top + id.Height; y++)
+	// 边界安全：colorMap 空指针检查
+	if (!colorMap)
 	{
-		for (int x = id.Left; x < id.Left + id.Width; x++)
+		UE_LOG(LogAnimTexture, Warning, TEXT("FGIFDecoder: Frame %d has no color map, skipping."), mCurrentFrame);
+		mCurrentFrame++;
+		if (mCurrentFrame >= mGIF->ImageCount) {
+			mDoNotDispose = false;
+			mCurrentFrame = bLooping ? 0 : mGIF->ImageCount - 1;
+			mLoopCount++;
+		}
+		return delayTime == 0 ? DefaultFrameDelay : delayTime;
+	}
+
+	// 边界安全：对帧子图像区域进行画布边界裁剪
+	const int frameHeight = GetHeight();
+	const int clampedLeft = FMath::Max(0, (int)id.Left);
+	const int clampedTop = FMath::Max(0, (int)id.Top);
+	const int clampedRight = FMath::Min(frameWidth, (int)(id.Left + id.Width));
+	const int clampedBottom = FMath::Min(frameHeight, (int)(id.Top + id.Height));
+
+	// decode current image to frame buffer
+	for (int y = clampedTop; y < clampedBottom; y++)
+	{
+		for (int x = clampedLeft; x < clampedRight; x++)
 		{
 			int p = y * frameWidth + x;
 			int i = (y - id.Top) * id.Width + x - id.Left;
 			int c = image.RasterBits[i];
 			FColor& out = mFrameBuffer[p];
+
+			// 边界安全：检查颜色索引是否在 colorMap 范围内
+			if (c < 0 || c >= colorMap->ColorCount)
+				continue;
 
 			const GifColorType& colorEntry = colorMap->Colors[c];
 			if (mDoNotDispose)
@@ -183,7 +207,7 @@ uint32 FGIFDecoder::GetHeight() const
 	if (mGIF)
 		return mGIF->SHeight;
 	else
-		return 0;
+		return 1;
 }
 
 const FColor* FGIFDecoder::GetFrameBuffer() const
@@ -247,11 +271,12 @@ void FGIFDecoder::ClearFrameBuffer(ColorMapObject* ColorMap,
 {
 	FColor bg = { 0, 0, 0, 255 };
 
+	// 边界安全：使用传入的 ColorMap（而非 mGIF->SColorMap）进行验证和取色
 	if (ColorMap && mGIF->SBackGroundColor >= 0 &&
 		mGIF->SBackGroundColor < ColorMap->ColorCount) 
 	{
 		const GifColorType& colorEntry =
-			mGIF->SColorMap->Colors[mGIF->SBackGroundColor];
+			ColorMap->Colors[mGIF->SBackGroundColor];
 		uint8_t alpha = bTransparent ? 0 : 255;
 		bg = { colorEntry.Red, colorEntry.Green, colorEntry.Blue, alpha };
 	}
@@ -263,14 +288,26 @@ void FGIFDecoder::GCB_Background(int left, int top, int width, int height,
 	ColorMapObject* colorMap,
 	bool bTransparent)
 {
-	const GifColorType& colorEntry = colorMap->Colors[mGIF->SBackGroundColor];
-	uint8_t alpha = static_cast<uint8_t>(bTransparent ? 0 : 255);
-	FColor bg = { colorEntry.Red, colorEntry.Green, colorEntry.Blue, alpha };
-
-	int frameWidth = GetWidth();
-	for (int y = top; y < top + height; y++)
+	// 边界安全：检查 colorMap 和背景色索引
+	FColor bg = { 0, 0, 0, static_cast<uint8>(bTransparent ? 0 : 255) };
+	if (colorMap && mGIF->SBackGroundColor >= 0 &&
+		mGIF->SBackGroundColor < colorMap->ColorCount)
 	{
-		for (int x = left; x < left + width; x++)
+		const GifColorType& colorEntry = colorMap->Colors[mGIF->SBackGroundColor];
+		bg = { colorEntry.Red, colorEntry.Green, colorEntry.Blue, static_cast<uint8>(bTransparent ? 0 : 255) };
+	}
+
+	// 边界安全：对区域进行画布边界裁剪
+	const int frameWidth = GetWidth();
+	const int frameHeight = GetHeight();
+	const int clampedLeft = FMath::Max(0, left);
+	const int clampedTop = FMath::Max(0, top);
+	const int clampedRight = FMath::Min(frameWidth, left + width);
+	const int clampedBottom = FMath::Min(frameHeight, top + height);
+
+	for (int y = clampedTop; y < clampedBottom; y++)
+	{
+		for (int x = clampedLeft; x < clampedRight; x++)
 		{
 			int p = y * frameWidth + x;
 			mFrameBuffer[p] = bg;

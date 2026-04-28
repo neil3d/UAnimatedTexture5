@@ -22,7 +22,7 @@ class UAnimatedTexture2D;
 class FAnimatedTextureResource : public FTextureResource
 {
 public:
-	FAnimatedTextureResource(UAnimatedTexture2D* InOwner);
+	explicit FAnimatedTextureResource(UAnimatedTexture2D* InOwner);
 
 	//~ Begin FTextureResource Interface.
 	virtual uint32 GetSizeX() const override;
@@ -30,11 +30,6 @@ public:
 	virtual void InitRHI(FRHICommandListBase& RHICmdList) override;
 	virtual void ReleaseRHI() override;
 	//~ End FTextureResource Interface.
-
-private:
-	int32 GetDefaultMipMapBias() const;
-
-	void CreateSamplerStates(float MipMapBias);
 
 private:
 	UAnimatedTexture2D* Owner;

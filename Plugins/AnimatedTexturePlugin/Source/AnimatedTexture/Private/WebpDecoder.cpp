@@ -46,14 +46,25 @@ bool FWebpDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize)
 		return false;
 	}
 
-	// TODO
-	int Timestamp = 0;
-	uint8* Buffer = nullptr;
-	while (WebPAnimDecoderHasMoreFrames(Decoder)) {
-		WebPAnimDecoderGetNext(Decoder, &Buffer, &Timestamp);
+	// 使用 WebPDemux API 直接从文件头信息获取动画总时长，
+	// 避免在初始化阶段遍历解码所有帧造成不必要的性能开销
+	{
+		WebPDemuxer* Demuxer = WebPDemux(&WData);
+		if (Demuxer)
+		{
+			WebPIterator Iter;
+			if (WebPDemuxGetFrame(Demuxer, 1, &Iter))
+			{
+				uint32 TotalDuration = 0;
+				do {
+					TotalDuration += Iter.duration;
+				} while (WebPDemuxNextFrame(&Iter));
+				Duration = TotalDuration;
+				WebPDemuxReleaseIterator(&Iter);
+			}
+			WebPDemuxDelete(Demuxer);
+		}
 	}
-	WebPAnimDecoderReset(Decoder);
-	Duration = Timestamp;
 
 	return true;
 }
@@ -97,8 +108,12 @@ uint32 FWebpDecoder::NextFrame(uint32 DefaultFrameDelay, bool bLooping)
 
 void FWebpDecoder::Reset()
 {
-	WebPAnimDecoderReset(Decoder);
-	FrameBuffer = nullptr; 
+	if (Decoder)
+	{
+		WebPAnimDecoderReset(Decoder);
+	}
+	FrameBuffer = nullptr;
+	PrevFrameTimestamp = 0;
 }
 
 const FColor* FWebpDecoder::GetFrameBuffer() const
