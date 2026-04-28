@@ -56,6 +56,7 @@ void UMtlExpTextureSampleParameterAnim::GetCaption(TArray<FString>& OutCaptions)
 }
 #endif // WITH_EDITOR
 
+#if WITH_EDITOR
 bool UMtlExpTextureSampleParameterAnim::TextureIsValid(UTexture* InTexture, FString& OutMessage)
 {
 	bool Result = false;
@@ -98,5 +99,6 @@ void UMtlExpTextureSampleParameterAnim::SetDefaultTexture()
 {
 	Texture = LoadObject<UTexture2D>(NULL, TEXT("/Engine/EngineResources/DefaultTexture.DefaultTexture"), NULL, LOAD_None, NULL);
 }
+#endif // WITH_EDITOR
 
 #undef LOCTEXT_NAMESPACE

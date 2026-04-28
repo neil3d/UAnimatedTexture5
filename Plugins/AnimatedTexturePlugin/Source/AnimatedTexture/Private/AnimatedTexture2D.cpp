@@ -15,6 +15,7 @@
 #include "AnimatedTextureCompat.h"
 #include "GIFDecoder.h"
 #include "WebpDecoder.h"
+#include "RenderingThread.h"
 
 float UAnimatedTexture2D::GetSurfaceWidth() const
 {
