@@ -1,25 +1,39 @@
 # Animated Texture Plugin for Unreal Engine 5
 
-----
-This plugin allows you to import animated pictures into your Unreal Engine 5 project as a new AnimatedTexture asset type.
-- [x] Support .GIF files
-- [x] Support .Webp files
+A plugin that lets you import animated GIF and WebP images into Unreal Engine 5 as a new **AnimatedTexture** asset type.
 
 ![DEMO](./Docs/images/demo.png)
 
+## Engine Compatibility
+
+| UE Version | Status    |
+|------------|-----------|
+| 5.3        | ✅ Supported |
+| 5.4        | ✅ Supported |
+| 5.5        | ✅ Supported |
+| 5.6        | ✅ Supported |
+| 5.7        | ✅ Supported |
+
 ## Features
 
-- [x] Import Animated GIF/Webp as a Texture, supports animation, transparency, interlace, etc
-- [x] Editing in default Texture Editor
-- [x] Supports UMG Image widget, Material and Material Instance
-- [x] Animation playback APIs
-- [ ] Runtime load GIF/Webp file from disk or download from web
+- Import animated GIF / WebP files as Texture assets, with full support for animation, transparency, interlacing, and more
+- Editable through the built-in Texture Editor
+- Works with UMG Image widgets, Materials, and Material Instances
+- Blueprint-accessible playback API — Play, Stop, SetPlayRate, SetLooping, etc.
 
-## Compatibility
+## Platforms
 
-The plugin should work on all platforms the Unreal Engine 5 supports, but only been tested on the following platform:
-- [x] Windows 64
-- [x] MacOS
+This plugin should work on all platforms supported by Unreal Engine 5. It has been tested on:
+
+- Windows (64-bit)
+- macOS
+
+## Installation
+
+1. Download the plugin package for your engine version from the [Releases](https://github.com/neil3d/UAnimatedTexture5/releases) page.
+2. Extract and copy the `AnimatedTexturePlugin` folder into your project's `Plugins` directory.
+3. Restart the Unreal Editor. Enable the plugin if prompted.
+4. Drag and drop `.gif` or `.webp` files into the Content Browser to import them.
 
 ## Screenshots
 
@@ -29,4 +43,6 @@ The plugin should work on all platforms the Unreal Engine 5 supports, but only b
 
 ![Playback API DEMO](./Docs/images/api.png)
 
+## License
 
+This project is licensed under the [MIT License](LICENSE).
