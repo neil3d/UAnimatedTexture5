@@ -27,7 +27,7 @@ enum class EAnimatedTextureType : uint8
 
 
 /**
- * Animated Texutre
+ * Animated Texture
  * @see class UTexture2D
  */
 UCLASS(BlueprintType, Category = AnimatedTexture)
@@ -120,6 +120,21 @@ public: // Internal APIs
 	void ImportFile(EAnimatedTextureType InFileType, const uint8* InBuffer, uint32 InBufferSize);
 
 	float RenderFrameToTexture();
+
+	/**
+	 * 根据文件扩展名（或包含扩展名的完整文件名）推断动画纹理类型。
+	 * 接受形如 ".gif" / "gif" / "foo.webp" 等输入，内部做规范化处理，大小写不敏感。
+	 * 无法识别时返回 EAnimatedTextureType::None。
+	 */
+	static EAnimatedTextureType DetectTypeFromExtension(const FString& FilenameOrExt);
+
+	/**
+	 * 根据文件内容 magic bytes 嗅探动画纹理类型：
+	 *  - "GIF87a" / "GIF89a" -> Gif
+	 *  - "RIFF....WEBP"      -> Webp
+	 * 无法识别时返回 EAnimatedTextureType::None。
+	 */
+	static EAnimatedTextureType DetectTypeFromMagic(const uint8* Buffer, int32 Size);
 
 private:
 	UPROPERTY()

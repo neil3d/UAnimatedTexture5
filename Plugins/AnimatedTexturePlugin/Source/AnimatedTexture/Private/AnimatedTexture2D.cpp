@@ -16,6 +16,7 @@
 #include "GIFDecoder.h"
 #include "WebpDecoder.h"
 #include "RenderingThread.h"
+#include "Misc/Paths.h"
 
 float UAnimatedTexture2D::GetSurfaceWidth() const
 {
@@ -116,6 +117,61 @@ void UAnimatedTexture2D::ImportFile(EAnimatedTextureType InFileType, const uint8
 {
 	FileType = InFileType;
 	FileBlob = TArray<uint8>(InBuffer, InBufferSize);
+}
+
+EAnimatedTextureType UAnimatedTexture2D::DetectTypeFromExtension(const FString& FilenameOrExt)
+{
+	// 取最右侧一段作为扩展名（兼容 "foo.gif" / ".gif" / "gif" / "a/b/c.webp" 等）
+	FString Ext = FPaths::GetExtension(FilenameOrExt, /*bIncludeDot=*/ false);
+	if (Ext.IsEmpty())
+	{
+		// FPaths::GetExtension 对于不含 '.' 的输入返回空串；此时把整串视为扩展名
+		Ext = FilenameOrExt;
+	}
+	Ext.TrimStartAndEndInline();
+	// 剥掉可能的前导 '.'
+	while (Ext.StartsWith(TEXT(".")))
+	{
+		Ext.RightChopInline(1, /*bAllowShrinking=*/ false);
+	}
+
+	if (Ext.Compare(TEXT("gif"), ESearchCase::IgnoreCase) == 0)
+	{
+		return EAnimatedTextureType::Gif;
+	}
+	if (Ext.Compare(TEXT("webp"), ESearchCase::IgnoreCase) == 0)
+	{
+		return EAnimatedTextureType::Webp;
+	}
+	return EAnimatedTextureType::None;
+}
+
+EAnimatedTextureType UAnimatedTexture2D::DetectTypeFromMagic(const uint8* Buffer, int32 Size)
+{
+	if (!Buffer || Size <= 0)
+	{
+		return EAnimatedTextureType::None;
+	}
+
+	// GIF: "GIF87a" / "GIF89a" (6 bytes)
+	if (Size >= 6
+		&& Buffer[0] == 'G' && Buffer[1] == 'I' && Buffer[2] == 'F'
+		&& Buffer[3] == '8'
+		&& (Buffer[4] == '7' || Buffer[4] == '9')
+		&& Buffer[5] == 'a')
+	{
+		return EAnimatedTextureType::Gif;
+	}
+
+	// WebP: "RIFF" ???? "WEBP"  (12 bytes 起步)
+	if (Size >= 12
+		&& Buffer[0] == 'R' && Buffer[1] == 'I' && Buffer[2] == 'F' && Buffer[3] == 'F'
+		&& Buffer[8] == 'W' && Buffer[9] == 'E' && Buffer[10] == 'B' && Buffer[11] == 'P')
+	{
+		return EAnimatedTextureType::Webp;
+	}
+
+	return EAnimatedTextureType::None;
 }
 
 float UAnimatedTexture2D::RenderFrameToTexture()
