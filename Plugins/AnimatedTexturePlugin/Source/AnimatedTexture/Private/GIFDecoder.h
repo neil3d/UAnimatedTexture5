@@ -34,6 +34,11 @@ public:
 	virtual uint32 GetDuration(uint32 DefaultFrameDelay) const override;
 	virtual bool SupportsTransparency() const override;
 
+	// 已完成循环次数；NextFrame 跨过末尾时 mLoopCount 会自增。
+	// 注意：当前 giflib 实现尚未解析 NETSCAPE2.0 应用扩展，因此 GetLoopCount()
+	// 仍按基类默认返回 0（视为无限循环 / 未声明）。
+	virtual uint32 GetCompletedLoops() const override { return static_cast<uint32>(mLoopCount); }
+
 private:
 	// 解析单帧的 GraphicsControlBlock：取出 disposal / 延时（毫秒） / 透明色索引。
 	// 缺省值：DISPOSAL_UNSPECIFIED / 0 / NO_TRANSPARENT_COLOR。

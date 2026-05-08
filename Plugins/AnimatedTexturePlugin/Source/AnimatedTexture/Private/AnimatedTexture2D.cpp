@@ -58,7 +58,14 @@ FTextureResource* UAnimatedTexture2D::CreateResource()
 		Decoder = MakeShared<FGIFDecoder, ESPMode::ThreadSafe>();
 		break;
 	case EAnimatedTextureType::Webp:
-		Decoder = MakeShared<FWebpDecoder, ESPMode::ThreadSafe>();
+		{
+			TSharedRef<FWebpDecoder, ESPMode::ThreadSafe> WebpDecoder
+				= MakeShared<FWebpDecoder, ESPMode::ThreadSafe>();
+			// 必须在 LoadFromMemory 之前赋值，下面会读到这两个开关。
+			WebpDecoder->bUseThreads = bUseMultithreadedDecode;
+			WebpDecoder->bPremultipliedAlpha = bPremultipliedAlpha;
+			Decoder = WebpDecoder;
+		}
 		break;
 	}
 
@@ -86,12 +93,21 @@ void UAnimatedTexture2D::Tick(float DeltaTime)
 	if (!Decoder)
 		return;
 
+	// 若开启了"尊重文件 loop_count"且文件声明了有限循环次数：
+	// 完成所声明的次数后自动停止播放（声明为 0 = 无限循环则不受影响）。
+	// 注意：bLooping 仍然控制单次播放是否回卷，loop_count 控制总次数上限。
+	const uint32 FileLoopCount = Decoder->GetLoopCount();
+	const bool bEffectiveLooping = bLooping
+		&& !(bRespectFileLoopCount
+			&& FileLoopCount > 0
+			&& Decoder->GetCompletedLoops() >= FileLoopCount);
+
 	FrameTime += DeltaTime * PlayRate;
 	if (FrameTime < FrameDelay)
 		return;
 
 	FrameTime = 0;
-	FrameDelay = RenderFrameToTexture();
+	FrameDelay = RenderFrameToTexture(bEffectiveLooping);
 }
 
 
@@ -189,10 +205,11 @@ EAnimatedTextureType UAnimatedTexture2D::DetectTypeFromMagic(const uint8* Buffer
 	return EAnimatedTextureType::None;
 }
 
-float UAnimatedTexture2D::RenderFrameToTexture()
+float UAnimatedTexture2D::RenderFrameToTexture(bool bEffectiveLooping)
 {
-	// 解码新的一帧到内存缓冲区
-	int nFrameDelay = Decoder->NextFrame(DefaultFrameDelay * 1000, bLooping);
+	// 解码新的一帧到内存缓冲区。bEffectiveLooping 由 Tick 计算后传入，
+	// 用于在 bRespectFileLoopCount 生效时让解码器在最后一轮停止回卷。
+	int nFrameDelay = Decoder->NextFrame(DefaultFrameDelay * 1000, bEffectiveLooping);
 
 	// 获取帧缓冲数据
 	const FColor* SrcFrameBuffer = Decoder->GetFrameBuffer();

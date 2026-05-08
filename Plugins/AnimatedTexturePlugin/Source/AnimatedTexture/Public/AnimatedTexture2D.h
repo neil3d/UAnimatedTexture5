@@ -54,6 +54,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture)
 		bool bLooping = true;
 
+	// 若开启，并且文件比特流声明了有限的 loop_count（>0），
+	// 在播放完该次数后将自动停止；声明为 0（无限）的文件不受影响。
+	// 仅 WebP 暴露 loop_count；GIF 当前不解析 NETSCAPE2.0 应用扩展，开启后等价于无限。
+	// 默认关闭以保持与历史版本一致的行为。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture, AdvancedDisplay)
+		bool bRespectFileLoopCount = false;
+
+	// 启用 libwebp 多线程解码（WebPAnimDecoderOptions::use_threads）。
+	// 对较大的 WebP 动画通常能减少单帧解码耗时；GIF 解码器忽略此开关。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture, AdvancedDisplay)
+		bool bUseMultithreadedDecode = false;
+
+	// 启用预乘 alpha (MODE_bgrA)。开启后必须搭配使用 (One, OneMinusSrcAlpha)
+	// 的混合方式才能得到正确合成；保持关闭则与原有材质工作流兼容。仅 WebP 生效。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture, AdvancedDisplay)
+		bool bPremultipliedAlpha = false;
+
 public:	// Playback APIs
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
 		void Play();
@@ -119,7 +136,7 @@ public:	// UObject Interface.
 public: // Internal APIs
 	void ImportFile(EAnimatedTextureType InFileType, const uint8* InBuffer, uint32 InBufferSize);
 
-	float RenderFrameToTexture();
+	float RenderFrameToTexture(bool bEffectiveLooping = true);
 
 	/**
 	 * 根据文件扩展名（或包含扩展名的完整文件名）推断动画纹理类型。

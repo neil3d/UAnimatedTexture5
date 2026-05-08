@@ -34,6 +34,19 @@ public:
 	virtual uint32 GetDuration(uint32 defaultFrameDelay) const = 0;
 	virtual bool SupportsTransparency() const = 0;
 
+	/**
+	 * 比特流中声明的"应循环次数"（0 表示无限循环 / 未声明）。
+	 * 用于支持文件原生 loop_count，配合 UAnimatedTexture2D::bRespectFileLoopCount 使用。
+	 * 默认实现返回 0，表示派生类未提供该信息。
+	 */
+	virtual uint32 GetLoopCount() const { return 0; }
+
+	/**
+	 * 已完成的循环次数（NextFrame 内部跨过末尾时累加）。
+	 * 用于和 GetLoopCount 比较，决定是否停止播放。
+	 */
+	virtual uint32 GetCompletedLoops() const { return 0; }
+
 public:
 	FAnimatedTextureDecoder(const FAnimatedTextureDecoder&) = delete;
 	FAnimatedTextureDecoder& operator=(const FAnimatedTextureDecoder&) = delete;
