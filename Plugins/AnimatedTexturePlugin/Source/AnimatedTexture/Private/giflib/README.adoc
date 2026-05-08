@@ -43,3 +43,10 @@ Eric Raymond <esr[AT]snark.thyrsus.com>
 
 There have been many other contributors; see the attributions in the
 version-control history to learn more.
+
+== Packages ==
+
+This code is commonly packaged as "giflib".
+
+image:https://repology.org/badge/vertical-allrepos/giflib.svg[Repology
+package status]

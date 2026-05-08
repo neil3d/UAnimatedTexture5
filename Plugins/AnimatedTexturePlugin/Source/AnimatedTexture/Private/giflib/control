@@ -3,7 +3,9 @@
 
 Package: giflib
 
-Destinations: ~,sourceforge
+XBS-Packaged-As: giflib
+
+Destinations: ~,sourceforge, vulns@meta.com
 
 Description: a library for rendering and generating GIF image files.
  This is the GIF service code in C used for over two decades by graphics
@@ -12,8 +14,12 @@ Description: a library for rendering and generating GIF image files.
 
 XBS-Web-Directory: doc/staging
 XBS-Logo: doc/staging/giflib-logo.gif
-XBS-SourceForge-Folder: giflib-5.x
+XBS-SourceForge-Folder: giflib-6.x
+
+XBS-Packaged-As: giflib
 
 XBS-VC-Tag-Template: %(version)s
 
 #XBS-Project-Tags: GIF, graphics
+
+XBS-Validate: make check spellcheck

@@ -329,9 +329,9 @@ truth about changes and the reasons for them is the repository.
         + New header includes for unistd.h and fcntl.h
         + Explicit declaration of many types to unsigned
         + Removed unused variables and functions
-        + Removed VersionStr from every library file.  Instead include it via
+        + Removed VerStr from every library file.  Instead include it via
           gif_lib_private.h
-    * gif_lib.h, gif_lib_private.h: Moved the VersionStr into gif_lib_private.h
+    * gif_lib.h, gif_lib_private.h: Moved the VerStr into gif_lib_private.h
       and made it a #define instead of a static char *.
     
 2004-02-19 Toshio Kuratomi <toshio@tiki-lounge.com> - r37    
