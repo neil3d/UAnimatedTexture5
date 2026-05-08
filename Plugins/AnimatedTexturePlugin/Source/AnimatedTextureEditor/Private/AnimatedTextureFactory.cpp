@@ -28,7 +28,7 @@ UAnimatedTextureFactory::UAnimatedTextureFactory(const FObjectInitializer& Objec
 	Formats.Add(TEXT("gif;GIF(Animation Supported)"));
 	Formats.Add(TEXT("webp;Webp(Animation Supported)"));
 
-	// Required to checkbefore UReimportTextureFactory
+	// Required to be checked before UReimportTextureFactory
 	ImportPriority = DefaultImportPriority + 1;
 }
 
@@ -52,9 +52,16 @@ UObject* UAnimatedTextureFactory::FactoryCreateBinary(UClass* InClass, UObject* 
 	// if the texture already exists, remember the user settings
 	UAnimatedTexture2D* ExistingTexture = FindObject<UAnimatedTexture2D>(InParent, *InName.ToString());
 	if (ExistingTexture) {
-		// TODO: use existing object settings
+		// 注：首次导入覆盖已有同名资产时，目前不保留旧资产的 UPROPERTY —— 仅 Reimport()
+		// 路径显式暂存/还原一份。如果将来要把两条路径合并，建议改成反射方式
+		// （UEngine::CopyPropertiesForUnrelatedObjects 或 FObjectWriter/FObjectReader），
+		// 避免每加一个 UPROPERTY 都要在两处同步手抄。
 	}
 
+	// FTextureReferenceReplacer 复制旧 UTexture::TextureReference 给新对象，让已有材质 /
+	// Slate Brush / 蓝图引用在覆盖式导入后继续指向有效 RHI。这条路径对 UAnimatedTexture2D
+	// （继承自 UTexture，非 UTexture2D）同样成立 —— 我们走的就是 UTexture::TextureReference
+	// 通道。设计背景见 Docs/BaseClassChoice.md §6。
 	FTextureReferenceReplacer RefReplacer(ExistingTexture);
 
 	// call parent method to create/overwrite anim texture object
@@ -78,11 +85,24 @@ UObject* UAnimatedTextureFactory::FactoryCreateBinary(UClass* InClass, UObject* 
 		UE_LOG(LogAnimTextureEditor, Error,
 			TEXT("UAnimatedTextureFactory: failed to init %s from buffer (type=%s)."),
 			*(InName.ToString()), Type);
+
+		// 清理 CreateOrOverwriteAsset 已经创建出来的半成品对象，避免它以 RF_Standalone | RF_Public
+		// 形式残留到下次 GC，干扰 Content Browser 与 Reference Viewer。对照 UTextureFactory 的失败路径。
+		AnimTexture->ClearFlags(RF_Standalone | RF_Public);
+		AnimTexture->MarkAsGarbage();
 		return nullptr;
 	}
 
 	//Replace the reference for the new texture with the existing one so that all current users still have valid references.
 	RefReplacer.Replace(AnimTexture);
+
+	// 写回 AssetImportData，让后续 CanReimport / Reimport 能拿到首次导入的源文件路径。
+	// 引擎 UTextureFactory::FactoryCreateBinary 的等价做法。UE 5.3 中 UFactory::CurrentFilename
+	// 是 public static FString，由 UFactory::ImportObject 在调用前设置好。
+	if (AnimTexture->AssetImportData)
+	{
+		AnimTexture->AssetImportData->Update(UFactory::CurrentFilename);
+	}
 
 	GEditor->GetEditorSubsystem<UImportSubsystem>()->BroadcastAssetPostImport(this, AnimTexture);
 
@@ -133,12 +153,18 @@ EReimportResult::Type UAnimatedTextureFactory::Reimport(UObject* Obj)
 		return EReimportResult::Failed;
 	}
 
+	// 暂存用户在 Details 里调过的所有 UPROPERTY，避免被 CreateOrOverwriteAsset 重置。
+	// 注意：每新增一个 EditAnywhere 的 UPROPERTY 都要在此处同步加入；自动化方案（反射）
+	// 留给后续 PR 评估，目前保持手抄风格以便阅读 diff。
 	enum TextureAddress AddressX = pTex->AddressX;
 	enum TextureAddress AddressY = pTex->AddressY;
 	float PlayRate = pTex->PlayRate;
 	bool SupportsTransparency = pTex->SupportsTransparency;
 	float DefaultFrameDelay = pTex->DefaultFrameDelay;
 	bool bLooping = pTex->bLooping;
+	bool bRespectFileLoopCount = pTex->bRespectFileLoopCount;
+	bool bUseMultithreadedDecode = pTex->bUseMultithreadedDecode;
+	bool bPremultipliedAlpha = pTex->bPremultipliedAlpha;
 
 	bool OutCanceled = false;
 	if (ImportObject(pTex->GetClass(), pTex->GetOuter(), *pTex->GetName(), RF_Public | RF_Standalone, ResolvedSourceFilePath, nullptr, OutCanceled) != nullptr)
@@ -151,6 +177,9 @@ EReimportResult::Type UAnimatedTextureFactory::Reimport(UObject* Obj)
 		pTex->SupportsTransparency = SupportsTransparency;
 		pTex->DefaultFrameDelay = DefaultFrameDelay;
 		pTex->bLooping = bLooping;
+		pTex->bRespectFileLoopCount = bRespectFileLoopCount;
+		pTex->bUseMultithreadedDecode = bUseMultithreadedDecode;
+		pTex->bPremultipliedAlpha = bPremultipliedAlpha;
 
 		// Try to find the outer package so we can dirty it up
 		if (pTex->GetOuter())

@@ -23,6 +23,10 @@ public:
 
 private:
 	void OnPostEngineInit();
+	void RegisterAssetContextMenu();
+
+	FDelegateHandle PostEngineInitHandle;
+	FName AssetContextMenuOwnerName;
 };
 
 DECLARE_LOG_CATEGORY_EXTERN(LogAnimTextureEditor, Log, All);

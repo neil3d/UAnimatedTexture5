@@ -15,7 +15,9 @@
 #include "AnimatedTextureThumbnailRenderer.generated.h"
 
 /**
- * 
+ * UAnimatedTexture2D 的 Content Browser 缩略图渲染器：
+ * 透明纹理时先绘棋盘背景，再叠当前帧的 RHI 资源。
+ * 不驱动播放 —— 显示哪一帧由 UAnimatedTexture2D::Tick（编辑器内也会跑）决定。
  */
 UCLASS()
 class ANIMATEDTEXTUREEDITOR_API UAnimatedTextureThumbnailRenderer : public UThumbnailRenderer
