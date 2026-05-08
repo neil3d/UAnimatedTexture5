@@ -116,3 +116,11 @@ void UMyUserWidget::LoadLocalGif()
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+## Support
+
+If this plugin saved you time and you'd like to say thanks, you can buy me a coffee:
+
+[![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal)](https://paypal.me/neilfang3d)
+
+Donations are 100% optional — stars and PRs are equally welcome. 🙏
