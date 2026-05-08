@@ -39,7 +39,8 @@ public class AnimatedTexture : ModuleRules
 				"CoreUObject",
 				// ... add private dependencies that you statically link with here ...	
 				"RHI",
-				"RenderCore"
+				"RenderCore",
+				"HTTP"
 			}
 			);
 		

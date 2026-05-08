@@ -11,6 +11,7 @@
 #include "AnimatedTextureFactory.h"
 #include "AnimatedTextureEditorModule.h"
 #include "AnimatedTexture2D.h"
+#include "AnimatedTextureFunctionLibrary.h"
 #include "TextureReferenceResolver.h"
 
 #include "Subsystems/ImportSubsystem.h"	// UnrealEd
@@ -65,15 +66,20 @@ UObject* UAnimatedTextureFactory::FactoryCreateBinary(UClass* InClass, UObject* 
 		return nullptr;
 	}
 
-	// just copy file blob to AnimTexture object
-	EAnimatedTextureType AnimTextureType = EAnimatedTextureType::None;
-	FString FileType(Type);
-	if (FileType.Compare(TEXT("gif"), ESearchCase::IgnoreCase) == 0)
-		AnimTextureType = EAnimatedTextureType::Gif;
-	else if (FileType.Compare(TEXT("webp"), ESearchCase::IgnoreCase) == 0)
-		AnimTextureType = EAnimatedTextureType::Webp;
+	// 解析字节流并把内容填充到 AnimTexture；类型判断与 ImportFile 调用
+	// 都通过 Runtime 模块提供的 UAnimatedTextureFunctionLibrary 完成，保持 Runtime/Editor 共用一处真源。
+	// 先基于 Factory 已知的 Type 字符串（来自扩展名注册）得到枚举，解析不出再回落到 magic bytes 嗅探。
+	const EAnimatedTextureType AnimTextureType = UAnimatedTexture2D::DetectTypeFromExtension(FString(Type));
 
-	AnimTexture->ImportFile(AnimTextureType, Buffer, BufferEnd - Buffer);
+	const bool bInitOk = UAnimatedTextureFunctionLibrary::InitAnimatedTextureFromMemory(
+		AnimTexture, Buffer, static_cast<int32>(BufferEnd - Buffer), AnimTextureType);
+	if (!bInitOk)
+	{
+		UE_LOG(LogAnimTextureEditor, Error,
+			TEXT("UAnimatedTextureFactory: failed to init %s from buffer (type=%s)."),
+			*(InName.ToString()), Type);
+		return nullptr;
+	}
 
 	//Replace the reference for the new texture with the existing one so that all current users still have valid references.
 	RefReplacer.Replace(AnimTexture);
