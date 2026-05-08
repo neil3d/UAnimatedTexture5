@@ -91,6 +91,8 @@ void UMyUserWidget::LoadLocalGif()
 - **Cancel** — a Blueprint-callable method on the download node; will trigger `On Canceled` exactly once.
 - **Load Animated Texture From Memory** — synchronous helper accepting a byte array (e.g. bytes read from Pak or a custom network protocol).
 
+![blueprint_nodes.png](Docs/images/blueprint_nodes.png)
+
 ### Error Codes
 
 `EAnimatedTextureLoadError`: `None`, `HttpFailed`, `HttpBadStatus`, `EmptyBody`, `DecodeFailed`, `FileNotFound`, `InvalidFormat`, `SizeLimitExceeded`, `InvalidUrl`.
