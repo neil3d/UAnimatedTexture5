@@ -13,10 +13,25 @@
 #include "AnimatedTexture2D.h"
 #include "AnimatedTextureResource.h"
 #include "AnimatedTextureCompat.h"
+#include "AnimatedTextureModule.h"
 #include "GIFDecoder.h"
 #include "WebpDecoder.h"
 #include "RenderingThread.h"
 #include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
+#include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
+#include "Modules/ModuleManager.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+
+// 调试用：通过 `at.DumpFrames 1` 开启，把每个动画纹理实例解码出的每帧
+// 顺序编号写盘到 <Saved>/AnimatedTextureDump/<Name>_frame_NNNN.png。
+// 默认 0 关闭，零开销；非 0 时执行 PNG 编码（开销可观，仅诊断用）。
+static TAutoConsoleVariable<int32> CVarDumpFrames(
+	TEXT("at.DumpFrames"), 0,
+	TEXT("Dump each rendered animated-texture frame as PNG to <Saved>/AnimatedTextureDump/. 0=off, !=0=on."),
+	ECVF_Default);
 
 float UAnimatedTexture2D::GetSurfaceWidth() const
 {
@@ -203,6 +218,35 @@ float UAnimatedTexture2D::RenderFrameToTexture()
 	CommandData->RHIResource = TextureResource;
 	CommandData->FrameBufferCopy.SetNumUninitialized(BufferSize);
 	FMemory::Memcpy(CommandData->FrameBufferCopy.GetData(), SrcFrameBuffer, BufferSize);
+
+	//-- 调试用：把当前帧 dump 成 PNG 写盘
+	if (CVarDumpFrames.GetValueOnGameThread() != 0 && FrameWidth > 0 && FrameHeight > 0)
+	{
+		IImageWrapperModule& WrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
+		TSharedPtr<IImageWrapper> Wrapper = WrapperModule.CreateImageWrapper(EImageFormat::PNG);
+		if (Wrapper.IsValid()
+			&& Wrapper->SetRaw(SrcFrameBuffer, static_cast<int64>(BufferSize),
+				static_cast<int32>(FrameWidth), static_cast<int32>(FrameHeight),
+				ERGBFormat::BGRA, 8))
+		{
+			TArray64<uint8> Compressed = Wrapper->GetCompressed();
+			if (Compressed.Num() > 0)
+			{
+				const FString DumpDir = FPaths::ProjectSavedDir() / TEXT("AnimatedTextureDump");
+				IFileManager::Get().MakeDirectory(*DumpDir, /*Tree=*/ true);
+				const FString FilePath = DumpDir / FString::Printf(TEXT("%s_frame_%04d.png"), *GetName(), FrameDumpCounter);
+				if (FFileHelper::SaveArrayToFile(Compressed, *FilePath))
+				{
+					UE_LOG(LogAnimTexture, Verbose, TEXT("AnimatedTexture: dumped frame to %s"), *FilePath);
+				}
+				else
+				{
+					UE_LOG(LogAnimTexture, Warning, TEXT("AnimatedTexture: failed to write dump file %s"), *FilePath);
+				}
+				++FrameDumpCounter;
+			}
+		}
+	}
 
 	//-- 提交渲染命令
 	ENQUEUE_RENDER_COMMAND(AnimTexture2D_RenderFrame)(

@@ -22,7 +22,7 @@ class FWebpDecoder : public FAnimatedTextureDecoder
 {
 public:
 	FWebpDecoder() = default;
-	virtual ~FWebpDecoder();
+	virtual ~FWebpDecoder() override;
 
 	virtual bool LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize) override;
 	virtual void Close() override;

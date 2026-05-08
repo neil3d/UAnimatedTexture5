@@ -41,7 +41,8 @@ public class AnimatedTexture : ModuleRules
 				// ... add private dependencies that you statically link with here ...	
 				"RHI",
 				"RenderCore",
-				"HTTP"
+				"HTTP",
+				"ImageWrapper"	// 用于 at.DumpFrames CVar 把每帧编码为 PNG 写盘做诊断
 			}
 			);
 		

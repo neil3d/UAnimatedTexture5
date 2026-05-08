@@ -150,4 +150,8 @@ private:
 	float FrameDelay = 0.0f;
 	float FrameTime = 0.0f;
 	bool bPlaying = true;
+
+	// 调试用：通过 CVar `at.DumpFrames` 启用时，对解码出的每帧顺序编号写盘到
+	// <Saved>/AnimatedTextureDump/<Name>_frame_NNNN.png，便于和 Chrome 等参考实现对比。
+	int32 FrameDumpCounter = 0;
 };

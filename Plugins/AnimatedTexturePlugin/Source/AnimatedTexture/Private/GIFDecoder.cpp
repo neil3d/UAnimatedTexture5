@@ -16,35 +16,114 @@ FGIFDecoder::~FGIFDecoder()
 	Close();
 }
 
+// 把 giflib 的读取请求映射到 [Cur, End) 区间内，避免越读。
 static int _GIF_InputFunc(GifFileType* gifFile, GifByteType* buffer, int length)
 {
-	uint8_t* fileData = (uint8_t*)(gifFile->UserData);
-	memcpy(buffer, fileData, length);
-	gifFile->UserData = fileData + length;
-	return length;
+	auto* Cursor = static_cast<FGIFDecoder::FInputCursor*>(gifFile->UserData);
+	if (!Cursor || !Cursor->Cur || Cursor->Cur >= Cursor->End || length <= 0)
+	{
+		return 0;
+	}
+
+	const PTRINT Remaining = Cursor->End - Cursor->Cur;
+	const int ToRead = static_cast<int>(FMath::Min<PTRINT>(length, Remaining));
+	if (ToRead <= 0)
+	{
+		return 0;
+	}
+
+	FMemory::Memcpy(buffer, Cursor->Cur, ToRead);
+	Cursor->Cur += ToRead;
+	return ToRead;
 }
 
 bool FGIFDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize)
 {
+	if (!InBuffer || InBufferSize == 0)
+	{
+		UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: empty input buffer."));
+		return false;
+	}
+
+	mInputCursor.Cur = InBuffer;
+	mInputCursor.End = InBuffer + InBufferSize;
+
 	int gifError = 0;
-	mGIF = DGifOpen((void*)InBuffer, _GIF_InputFunc, &gifError);
+	mGIF = DGifOpen(&mInputCursor, _GIF_InputFunc, &gifError);
 	if (mGIF == nullptr)
 	{
 		FString Error(GifErrorString(gifError));
 		UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: GIF file open failed, %s."), *Error);
+		mInputCursor = FInputCursor();
 		return false;
 	}
 
 	gifError = DGifSlurp(mGIF);
 	if (gifError != GIF_OK)
 	{
-		FString Error(GifErrorString(gifError));
+		FString Error(GifErrorString(mGIF->Error));
 		UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: GIF file load failed, %s."), *Error);
+		// 不在此处释放 mGIF，由 Close() 统一处理。
 		return false;
 	}
 
-	mFrameBuffer.SetNum(mGIF->SWidth * mGIF->SHeight);
-	ClearFrameBuffer(mGIF->SColorMap, true);
+	if (mGIF->SWidth <= 0 || mGIF->SHeight <= 0)
+	{
+		UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: invalid canvas size %dx%d."), mGIF->SWidth, mGIF->SHeight);
+		return false;
+	}
+
+	// 在 init 画布之前先解析 bg 颜色（依赖 mGIF->SavedImages 的 GCB 信息）。
+	mResolvedBgColor = ResolveBgColor();
+
+	const int32 PixelCount = mGIF->SWidth * mGIF->SHeight;
+	mFrameBuffer.Init(mResolvedBgColor, PixelCount);
+
+	mCurrentFrame = 0;
+	mLoopCount = 0;
+	mPrevDisposalMode = DISPOSAL_UNSPECIFIED;
+	mPrevRect = FIntRect();
+	mPrevTransparentColor = NO_TRANSPARENT_COLOR;
+	mSnapshotBuffer.Empty();
+
+	// DGifSlurp 已把全部数据读入内存，cursor 后续不再使用。
+	mInputCursor = FInputCursor();
+
+	// 诊断日志：dump GIF 元数据 + 每帧结构（默认 Verbose 级别，需 `Log LogAnimTexture Verbose`）
+	if (UE_LOG_ACTIVE(LogAnimTexture, Verbose))
+	{
+		const int32 GctSize = mGIF->SColorMap ? mGIF->SColorMap->ColorCount : 0;
+		FString BgDescription;
+		if (mResolvedBgColor.A == 0)
+		{
+			BgDescription = FString::Printf(TEXT("transparent (bg=%d, gct=%d)"), mGIF->SBackGroundColor, GctSize);
+		}
+		else
+		{
+			BgDescription = FString::Printf(TEXT("(R=%u,G=%u,B=%u,A=255) from gct[%d]"),
+				mResolvedBgColor.R, mResolvedBgColor.G, mResolvedBgColor.B, mGIF->SBackGroundColor);
+		}
+
+		UE_LOG(LogAnimTexture, Verbose,
+			TEXT("FGIFDecoder: loaded canvas=%dx%d gct=%d bg-idx=%d resolved-bg=%s frames=%d"),
+			mGIF->SWidth, mGIF->SHeight, GctSize, mGIF->SBackGroundColor, *BgDescription, mGIF->ImageCount);
+
+		for (int i = 0; i < mGIF->ImageCount; i++)
+		{
+			const SavedImage& Img = mGIF->SavedImages[i];
+			const GifImageDesc& Desc = Img.ImageDesc;
+			int Disposal = DISPOSAL_UNSPECIFIED;
+			int Delay = 0;
+			int Trans = NO_TRANSPARENT_COLOR;
+			ParseGCB(Img, Disposal, Delay, Trans);
+			const int LctSize = Desc.ColorMap ? Desc.ColorMap->ColorCount : 0;
+			UE_LOG(LogAnimTexture, Verbose,
+				TEXT("  frame[%3d] rect=(%4d,%4d) %4dx%-4d lct=%3d %s disp=%d delay=%dms trans=%d"),
+				i, Desc.Left, Desc.Top, Desc.Width, Desc.Height, LctSize,
+				Desc.Interlace ? TEXT("I") : TEXT(" "), Disposal, Delay, Trans);
+		}
+	}
+
 	return true;
 }
 
@@ -58,130 +137,266 @@ void FGIFDecoder::Close()
 	}
 
 	mFrameBuffer.Empty();
+	mSnapshotBuffer.Empty();
+	mInputCursor = FInputCursor();
+
+	mCurrentFrame = 0;
+	mLoopCount = 0;
+	mPrevDisposalMode = DISPOSAL_UNSPECIFIED;
+	mPrevRect = FIntRect();
+	mPrevTransparentColor = NO_TRANSPARENT_COLOR;
+	mResolvedBgColor = FColor(0, 0, 0, 0);
+}
+
+FColor FGIFDecoder::ResolveBgColor() const
+{
+	if (!mGIF || !mGIF->SColorMap)
+	{
+		return FColor(0, 0, 0, 0);
+	}
+
+	const int BgIdx = mGIF->SBackGroundColor;
+	if (BgIdx < 0 || BgIdx >= mGIF->SColorMap->ColorCount)
+	{
+		return FColor(0, 0, 0, 0);
+	}
+
+	// 扫描所有帧的 GCB transparent index：若 bg 索引被任何一帧用作 transparent，
+	// 则 GIF 作者意图是"bg 即透明"（welcome2 / x-trans / Eokxd 都是这种），用透明。
+	for (int i = 0; i < mGIF->ImageCount; i++)
+	{
+		int Disposal = DISPOSAL_UNSPECIFIED;
+		int Delay = 0;
+		int Trans = NO_TRANSPARENT_COLOR;
+		ParseGCB(mGIF->SavedImages[i], Disposal, Delay, Trans);
+		if (Trans == BgIdx)
+		{
+			return FColor(0, 0, 0, 0);
+		}
+	}
+
+	const GifColorType& Entry = mGIF->SColorMap->Colors[BgIdx];
+	return FColor(Entry.Red, Entry.Green, Entry.Blue, 255);
+}
+
+void FGIFDecoder::ParseGCB(const SavedImage& Image, int& OutDisposalMode, int& OutDelayMs, int& OutTransparentColor) const
+{
+	OutDisposalMode = DISPOSAL_UNSPECIFIED;
+	OutDelayMs = 0;
+	OutTransparentColor = NO_TRANSPARENT_COLOR;
+
+	for (int i = 0; i < Image.ExtensionBlockCount; i++)
+	{
+		const ExtensionBlock& eb = Image.ExtensionBlocks[i];
+		if (eb.Function != GRAPHICS_EXT_FUNC_CODE)
+		{
+			continue;
+		}
+		GraphicsControlBlock gcb;
+		if (DGifExtensionToGCB(eb.ByteCount, eb.Bytes, &gcb) == GIF_ERROR)
+		{
+			continue;
+		}
+		// 同一帧理论上只有一个 GCB，若有多个则后面的覆盖前面的（与 DGifSavedExtensionToGCB 语义一致）。
+		OutDisposalMode = gcb.DisposalMode;
+		OutDelayMs = gcb.DelayTime * 10;	// GIF 的 DelayTime 单位是 1/100 秒
+		OutTransparentColor = gcb.TransparentColor;	// 已包含 NO_TRANSPARENT_COLOR(-1)
+	}
+}
+
+FIntRect FGIFDecoder::ClampRectToCanvas(int Left, int Top, int Width, int Height) const
+{
+	const int CanvasW = static_cast<int>(GetWidth());
+	const int CanvasH = static_cast<int>(GetHeight());
+
+	const int MinX = FMath::Clamp(Left, 0, CanvasW);
+	const int MinY = FMath::Clamp(Top, 0, CanvasH);
+	const int MaxX = FMath::Clamp(Left + Width, 0, CanvasW);
+	const int MaxY = FMath::Clamp(Top + Height, 0, CanvasH);
+
+	return FIntRect(MinX, MinY, MaxX, MaxY);
+}
+
+void FGIFDecoder::DisposeFrame(int DisposalMode, const FIntRect& Rect)
+{
+	if (Rect.Min.X >= Rect.Max.X || Rect.Min.Y >= Rect.Max.Y)
+	{
+		return;
+	}
+
+	const int CanvasW = static_cast<int>(GetWidth());
+
+	if (DisposalMode == DISPOSE_BACKGROUND)
+	{
+		// 按 GIF89a 规范：清成 SBackGroundColor。当 bg 与 transparent 索引重合时
+		// ResolveBgColor 已退化为 (0,0,0,0)，与 Chrome 行为兼容。
+		const FColor Clear = mResolvedBgColor;
+		for (int y = Rect.Min.Y; y < Rect.Max.Y; y++)
+		{
+			FColor* Row = mFrameBuffer.GetData() + y * CanvasW;
+			for (int x = Rect.Min.X; x < Rect.Max.X; x++)
+			{
+				Row[x] = Clear;
+			}
+		}
+	}
+	else if (DisposalMode == DISPOSE_PREVIOUS)
+	{
+		RestoreSnapshot(Rect);
+	}
+	// DISPOSAL_UNSPECIFIED / DISPOSE_DO_NOT：保留画布。
+}
+
+void FGIFDecoder::SaveSnapshot()
+{
+	mSnapshotBuffer = mFrameBuffer;
+}
+
+void FGIFDecoder::RestoreSnapshot(const FIntRect& Rect)
+{
+	if (mSnapshotBuffer.Num() != mFrameBuffer.Num())
+	{
+		// 还没拍过有效快照（例如首帧之前），退化为清成 bg 色（与 LoadFromMemory 初始一致）。
+		const int CanvasW = static_cast<int>(GetWidth());
+		const FColor Clear = mResolvedBgColor;
+		for (int y = Rect.Min.Y; y < Rect.Max.Y; y++)
+		{
+			FColor* Row = mFrameBuffer.GetData() + y * CanvasW;
+			for (int x = Rect.Min.X; x < Rect.Max.X; x++)
+			{
+				Row[x] = Clear;
+			}
+		}
+		return;
+	}
+
+	const int CanvasW = static_cast<int>(GetWidth());
+	for (int y = Rect.Min.Y; y < Rect.Max.Y; y++)
+	{
+		FColor* DstRow = mFrameBuffer.GetData() + y * CanvasW;
+		const FColor* SrcRow = mSnapshotBuffer.GetData() + y * CanvasW;
+		for (int x = Rect.Min.X; x < Rect.Max.X; x++)
+		{
+			DstRow[x] = SrcRow[x];
+		}
+	}
 }
 
 uint32 FGIFDecoder::NextFrame(uint32 DefaultFrameDelay, bool bLooping)
 {
-	if (!mGIF) return DefaultFrameDelay;
-
-	const SavedImage& image = mGIF->SavedImages[mCurrentFrame];
-	const auto& id = image.ImageDesc;
-	int frameWidth = GetWidth();
-	ColorMapObject* colorMap =
-		image.ImageDesc.ColorMap ? image.ImageDesc.ColorMap : mGIF->SColorMap;
-
-	// handle GCB
-	int delayTime = 0;
-	int transparentColor = -1;
-
-	for (int i = 0; i < image.ExtensionBlockCount; i++)
+	if (!mGIF || mGIF->ImageCount <= 0)
 	{
-		const ExtensionBlock& eb = image.ExtensionBlocks[i];
-		if (eb.Function == GRAPHICS_EXT_FUNC_CODE)
-		{
-			GraphicsControlBlock gcb;
-			if (DGifExtensionToGCB(eb.ByteCount, eb.Bytes, &gcb) != GIF_ERROR)
-			{
-				delayTime = gcb.DelayTime * 10;  // 1/100 second
-				if (gcb.TransparentColor != NO_TRANSPARENT_COLOR)
-					transparentColor = gcb.TransparentColor;
-
-				switch (gcb.DisposalMode)
-				{
-				case DISPOSAL_UNSPECIFIED:
-					// No disposal specified. The decoder is not required to take any
-					// action.
-					break;
-				case DISPOSE_DO_NOT:
-					// Do not dispose. The graphic is to be left in place.
-					mDoNotDispose = true;
-					break;
-				case DISPOSE_BACKGROUND:
-					//  Restore to background color. The area used by the graphic must
-					//  be restored to the background color.
-					if (!mDoNotDispose)  // MY HACK!!!
-						GCB_Background(id.Left, id.Top, id.Width, id.Height, colorMap,
-							transparentColor != NO_TRANSPARENT_COLOR);
-					break;
-				case DISPOSE_PREVIOUS:
-					// Restore to previous. The decoder is required to restore the area
-					// overwritten by the graphic with what was there prior to rendering
-					// the graphic.
-					//std::cout << "DISPOSE_PREVIOUS" << std::endl;
-					break;
-				}// end of switch
-			}
-		}  // end of if
-	}    // end of for
-
-	// first frame -- draw the background
-	if (mCurrentFrame == 0)
-	{
-		ClearFrameBuffer(mGIF->SColorMap,
-			transparentColor != NO_TRANSPARENT_COLOR);
+		return DefaultFrameDelay;
 	}
 
-	// 边界安全：colorMap 空指针检查
+	if (mCurrentFrame < 0 || mCurrentFrame >= mGIF->ImageCount)
+	{
+		mCurrentFrame = 0;
+	}
+
+	const int RenderingFrame = mCurrentFrame;
+	const SavedImage& Image = mGIF->SavedImages[RenderingFrame];
+	const GifImageDesc& id = Image.ImageDesc;
+
+	// Step 1: 根据"上一帧"的 disposal 清理画布上对应区域。
+	DisposeFrame(mPrevDisposalMode, mPrevRect);
+
+	// Step 2: 解析当前帧 GCB。
+	int curDisposalMode = DISPOSAL_UNSPECIFIED;
+	int delayTime = 0;
+	int transparentColor = NO_TRANSPARENT_COLOR;
+	ParseGCB(Image, curDisposalMode, delayTime, transparentColor);
+
+	// 把当前子图像区域裁剪到画布范围内。
+	const FIntRect curRect = ClampRectToCanvas(id.Left, id.Top, id.Width, id.Height);
+
+	// Step 3: 当前帧 disposal == PREVIOUS，则在绘制前先快照画布。
+	if (curDisposalMode == DISPOSE_PREVIOUS)
+	{
+		SaveSnapshot();
+	}
+
+	// Step 4: 把当前子图像绘到画布。
+	int32 PixelsWritten = 0;
+	int32 PixelsSkippedTransparent = 0;
+	int32 PixelsSkippedBadIndex = 0;
+	ColorMapObject* colorMap = id.ColorMap ? id.ColorMap : mGIF->SColorMap;
 	if (!colorMap)
 	{
-		UE_LOG(LogAnimTexture, Warning, TEXT("FGIFDecoder: Frame %d has no color map, skipping."), mCurrentFrame);
-		mCurrentFrame++;
-		if (mCurrentFrame >= mGIF->ImageCount) {
-			mDoNotDispose = false;
-			mCurrentFrame = bLooping ? 0 : mGIF->ImageCount - 1;
-			mLoopCount++;
-		}
-		return delayTime == 0 ? DefaultFrameDelay : delayTime;
+		UE_LOG(LogAnimTexture, Warning, TEXT("FGIFDecoder: Frame %d has no color map, skipping."), RenderingFrame);
 	}
-
-	// 边界安全：对帧子图像区域进行画布边界裁剪
-	const int frameHeight = GetHeight();
-	const int clampedLeft = FMath::Max(0, (int)id.Left);
-	const int clampedTop = FMath::Max(0, (int)id.Top);
-	const int clampedRight = FMath::Min(frameWidth, (int)(id.Left + id.Width));
-	const int clampedBottom = FMath::Min(frameHeight, (int)(id.Top + id.Height));
-
-	// decode current image to frame buffer
-	for (int y = clampedTop; y < clampedBottom; y++)
+	else if (curRect.Min.X < curRect.Max.X && curRect.Min.Y < curRect.Max.Y)
 	{
-		for (int x = clampedLeft; x < clampedRight; x++)
+		const int CanvasW = static_cast<int>(GetWidth());
+		const int ImgWidth = static_cast<int>(id.Width);
+		const GifByteType* Raster = Image.RasterBits;
+
+		for (int y = curRect.Min.Y; y < curRect.Max.Y; y++)
 		{
-			int p = y * frameWidth + x;
-			int i = (y - id.Top) * id.Width + x - id.Left;
-			int c = image.RasterBits[i];
-			FColor& out = mFrameBuffer[p];
+			FColor* DstRow = mFrameBuffer.GetData() + y * CanvasW;
+			const int srcY = y - id.Top;
+			const GifByteType* SrcRow = Raster + srcY * ImgWidth;
 
-			// 边界安全：检查颜色索引是否在 colorMap 范围内
-			if (c < 0 || c >= colorMap->ColorCount)
-				continue;
-
-			const GifColorType& colorEntry = colorMap->Colors[c];
-			if (mDoNotDispose)
+			for (int x = curRect.Min.X; x < curRect.Max.X; x++)
 			{
-				if (c != transparentColor)
+				const int srcX = x - id.Left;
+				const int c = SrcRow[srcX];
+
+				// 透明像素：跳过，保留画布既有内容（统一处理，无关 disposal）。
+				if (c == transparentColor)
 				{
-					out.R = colorEntry.Red;
-					out.G = colorEntry.Green;
-					out.B = colorEntry.Blue;
-					out.A = 255;
+					++PixelsSkippedTransparent;
+					continue;
 				}
-			}
-			else
-			{
+				// 颜色索引越界：跳过。
+				if (c < 0 || c >= colorMap->ColorCount)
+				{
+					++PixelsSkippedBadIndex;
+					continue;
+				}
+
+				const GifColorType& colorEntry = colorMap->Colors[c];
+				FColor& out = DstRow[x];
 				out.R = colorEntry.Red;
 				out.G = colorEntry.Green;
 				out.B = colorEntry.Blue;
-				out.A = (c == transparentColor ? 0 : 255);
+				out.A = 255;
+				++PixelsWritten;
 			}
-		}// end of x
-	}  // end of y
+		}
+	}
 
-	// next frame
+	// 诊断日志：每帧渲染 trace（默认不开启，需 `Log LogAnimTexture VeryVerbose`）
+	if (UE_LOG_ACTIVE(LogAnimTexture, VeryVerbose))
+	{
+		UE_LOG(LogAnimTexture, VeryVerbose,
+			TEXT("FGIFDecoder::NextFrame frame=%d prevDisp=%d curDisp=%d trans=%d rect=(%d,%d)->(%d,%d) writ=%d skipTrans=%d skipBad=%d delay=%dms loop=%d"),
+			RenderingFrame, mPrevDisposalMode, curDisposalMode, transparentColor,
+			curRect.Min.X, curRect.Min.Y, curRect.Max.X, curRect.Max.Y,
+			PixelsWritten, PixelsSkippedTransparent, PixelsSkippedBadIndex,
+			delayTime, mLoopCount);
+	}
+
+	// Step 6: 记录"当前帧"为下一帧解码时使用的 prev 状态。
+	mPrevDisposalMode = curDisposalMode;
+	mPrevRect = curRect;
+	mPrevTransparentColor = transparentColor;
+
+	// 推进帧索引。
 	mCurrentFrame++;
-	if (mCurrentFrame >= mGIF->ImageCount) {
-		mDoNotDispose = false;
-		mCurrentFrame = bLooping ? 0 : mGIF->ImageCount - 1;
+	if (mCurrentFrame >= mGIF->ImageCount)
+	{
 		mLoopCount++;
+		if (bLooping)
+		{
+			// 回到起点；prev 状态保留，下一次 NextFrame 会基于上一帧的 disposal 正确清理画布。
+			mCurrentFrame = 0;
+		}
+		else
+		{
+			// 不循环：停在最后一帧。
+			mCurrentFrame = mGIF->ImageCount - 1;
+		}
 	}
 
 	return delayTime == 0 ? DefaultFrameDelay : delayTime;
@@ -191,7 +406,20 @@ void FGIFDecoder::Reset()
 {
 	mCurrentFrame = 0;
 	mLoopCount = 0;
-	mDoNotDispose = false;
+	mPrevDisposalMode = DISPOSAL_UNSPECIFIED;
+	mPrevRect = FIntRect();
+	mPrevTransparentColor = NO_TRANSPARENT_COLOR;
+	mSnapshotBuffer.Empty();
+
+	// 重新把画布填回 mResolvedBgColor，与 LoadFromMemory 后的初始状态一致。
+	if (mFrameBuffer.Num() > 0)
+	{
+		const FColor Clear = mResolvedBgColor;
+		for (FColor& Pixel : mFrameBuffer)
+		{
+			Pixel = Clear;
+		}
+	}
 }
 
 uint32 FGIFDecoder::GetWidth() const
@@ -223,19 +451,11 @@ uint32 FGIFDecoder::GetDuration(uint32 DefaultFrameDelay) const
 	int duration = 0;
 	for (int i = 0; i < mGIF->ImageCount; i++)
 	{
-		const SavedImage& image = mGIF->SavedImages[i];
+		int disposal = DISPOSAL_UNSPECIFIED;
 		int delayTime = 0;
-		for (int j = 0; j < image.ExtensionBlockCount; j++)
-		{
-			const ExtensionBlock& eb = image.ExtensionBlocks[j];
-			if (eb.Function == GRAPHICS_EXT_FUNC_CODE)
-			{
-				GraphicsControlBlock gcb;
-				if (DGifExtensionToGCB(eb.ByteCount, eb.Bytes, &gcb) != GIF_ERROR)
-					delayTime = gcb.DelayTime * 10;  // 1/100 second
-			}
-		}// end of for(ext)
-		duration += delayTime == 0 ? DefaultFrameDelay : delayTime;
+		int transparent = NO_TRANSPARENT_COLOR;
+		ParseGCB(mGIF->SavedImages[i], disposal, delayTime, transparent);
+		duration += (delayTime == 0) ? DefaultFrameDelay : delayTime;
 	}
 
 	return duration;
@@ -248,69 +468,14 @@ bool FGIFDecoder::SupportsTransparency() const
 
 	for (int i = 0; i < mGIF->ImageCount; i++)
 	{
-		const SavedImage& image = mGIF->SavedImages[i];
-		for (int j = 0; j < image.ExtensionBlockCount; j++)
+		int disposal = DISPOSAL_UNSPECIFIED;
+		int delayTime = 0;
+		int transparent = NO_TRANSPARENT_COLOR;
+		ParseGCB(mGIF->SavedImages[i], disposal, delayTime, transparent);
+		if (transparent != NO_TRANSPARENT_COLOR)
 		{
-			const ExtensionBlock& eb = image.ExtensionBlocks[j];
-			if (eb.Function == GRAPHICS_EXT_FUNC_CODE)
-			{
-				GraphicsControlBlock gcb;
-				if (DGifExtensionToGCB(eb.ByteCount, eb.Bytes, &gcb) != GIF_ERROR)
-				{
-					if (gcb.TransparentColor != NO_TRANSPARENT_COLOR)
-						return true;
-				}
-			}
-		}// end of for(ext)
+			return true;
+		}
 	}
 	return false;
-}
-
-void FGIFDecoder::ClearFrameBuffer(ColorMapObject* ColorMap,
-	bool bTransparent) 
-{
-	FColor bg = { 0, 0, 0, 255 };
-
-	// 边界安全：使用传入的 ColorMap（而非 mGIF->SColorMap）进行验证和取色
-	if (ColorMap && mGIF->SBackGroundColor >= 0 &&
-		mGIF->SBackGroundColor < ColorMap->ColorCount) 
-	{
-		const GifColorType& colorEntry =
-			ColorMap->Colors[mGIF->SBackGroundColor];
-		uint8_t alpha = bTransparent ? 0 : 255;
-		bg = { colorEntry.Red, colorEntry.Green, colorEntry.Blue, alpha };
-	}
-
-	for (auto& pixel : mFrameBuffer) pixel = bg;
-}
-
-void FGIFDecoder::GCB_Background(int left, int top, int width, int height,
-	ColorMapObject* colorMap,
-	bool bTransparent)
-{
-	// 边界安全：检查 colorMap 和背景色索引
-	FColor bg = { 0, 0, 0, static_cast<uint8>(bTransparent ? 0 : 255) };
-	if (colorMap && mGIF->SBackGroundColor >= 0 &&
-		mGIF->SBackGroundColor < colorMap->ColorCount)
-	{
-		const GifColorType& colorEntry = colorMap->Colors[mGIF->SBackGroundColor];
-		bg = { colorEntry.Red, colorEntry.Green, colorEntry.Blue, static_cast<uint8>(bTransparent ? 0 : 255) };
-	}
-
-	// 边界安全：对区域进行画布边界裁剪
-	const int frameWidth = GetWidth();
-	const int frameHeight = GetHeight();
-	const int clampedLeft = FMath::Max(0, left);
-	const int clampedTop = FMath::Max(0, top);
-	const int clampedRight = FMath::Min(frameWidth, left + width);
-	const int clampedBottom = FMath::Min(frameHeight, top + height);
-
-	for (int y = clampedTop; y < clampedBottom; y++)
-	{
-		for (int x = clampedLeft; x < clampedRight; x++)
-		{
-			int p = y * frameWidth + x;
-			mFrameBuffer[p] = bg;
-		}
-	}  // end of y
 }
