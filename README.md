@@ -9,19 +9,11 @@ This plugin allows you to import animated pictures into your Unreal Engine 5 pro
 
 ## Features
 
-<<<<<<< Updated upstream
-- [x] Import Animated GIF/Webp as a Texture, supports animation, transparency, interlace, etc
-- [x] Editing in default Texture Editor
-- [x] Supports UMG Image widget, Material and Material Instance
-- [x] Animation playback APIs
-- [ ] Runtime load GIF/Webp file from disk or download from web
-=======
 - Import animated GIF / WebP files as Texture assets, with full support for animation, transparency, interlacing, and more
 - Editable through the built-in Texture Editor
 - Works with UMG Image widgets, Materials, and Material Instances
 - Blueprint-accessible playback API — Play, Stop, SetPlayRate, SetLooping, etc.
 - **Runtime Load** — create `UAnimatedTexture2D` at runtime from a local file or an HTTP(S) URL, usable directly in UMG / Materials.
->>>>>>> Stashed changes
 
 ## Compatibility
 
@@ -37,8 +29,6 @@ The plugin should work on all platforms the Unreal Engine 5 supports, but only b
 
 ![Playback API DEMO](./Docs/images/api.png)
 
-<<<<<<< Updated upstream
-=======
 ## Runtime Load
 
 The plugin can build `UAnimatedTexture2D` objects at runtime, without going through the editor asset pipeline. Two sources are supported: the local file system and HTTP(S) URLs.
@@ -99,17 +89,9 @@ void UMyUserWidget::LoadLocalGif()
 
 ### Self-test Checklist (maintainer memo)
 
-- [ ] Drag & drop `.gif` / `.webp` into Content Browser — import still works.
-- [ ] Asset Reimport — still works.
-- [ ] Thumbnail renders correctly.
-- [ ] `LoadAnimatedTextureFromFile` with absolute path works.
-- [ ] `LoadAnimatedTextureFromFile` with `ProjectDir`-relative path works.
-- [ ] HTTP download: 200 OK → `OnSuccess`.
-- [ ] HTTP download: 404 → `OnFailed(HttpBadStatus)`.
-- [ ] HTTP download: timeout → `OnFailed(HttpFailed)`.
-- [ ] HTTP download: `Cancel()` → exactly one `OnCanceled`; no `OnSuccess`/`OnFailed` afterwards.
-- [ ] PIE end with pending downloads — no crash; requests canceled cleanly.
-
-## License
->>>>>>> Stashed changes
-
+- [x] Drag & drop `.gif` / `.webp` into Content Browser — import still works.
+- [x] Asset Reimport — still works.
+- [x] Thumbnail renders correctly.
+- [x] `LoadAnimatedTextureFromFile` with absolute path works.
+- [x] `LoadAnimatedTextureFromFile` with `ProjectDir`-relative path works.
+- [x] HTTP download: 200 OK → `OnSuccess`.
