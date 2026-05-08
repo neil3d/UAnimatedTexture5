@@ -9,6 +9,7 @@ common_HEADERS = ../webp/types.h
 commondir = $(includedir)/webp
 
 noinst_HEADERS =
+noinst_HEADERS += ../dsp/cpu.h
 noinst_HEADERS += ../dsp/dsp.h
 noinst_HEADERS += ../webp/decode.h
 noinst_HEADERS += ../webp/encode.h
@@ -25,6 +26,8 @@ COMMON_SOURCES += filters_utils.c
 COMMON_SOURCES += filters_utils.h
 COMMON_SOURCES += huffman_utils.c
 COMMON_SOURCES += huffman_utils.h
+COMMON_SOURCES += palette.c
+COMMON_SOURCES += palette.h
 COMMON_SOURCES += quant_levels_dec_utils.c
 COMMON_SOURCES += quant_levels_dec_utils.h
 COMMON_SOURCES += rescaler_utils.c
