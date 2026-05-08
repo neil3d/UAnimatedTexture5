@@ -15,6 +15,7 @@
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
 #include "UObject/Package.h"
+#include "Components/Image.h"	// UMG
 
 bool UAnimatedTextureFunctionLibrary::InitAnimatedTextureFromMemory(
 	UAnimatedTexture2D* Target, const uint8* Buffer, int32 BufferSize, EAnimatedTextureType Type)
@@ -158,4 +159,26 @@ UAnimatedTexture2D* UAnimatedTextureFunctionLibrary::LoadAnimatedTextureFromFile
 	}
 
 	return Texture;
+}
+
+void UAnimatedTextureFunctionLibrary::SetBrushFromAnimatedTexture(
+	UImage* Image, UAnimatedTexture2D* Texture, bool bMatchSize)
+{
+	if (!Image)
+	{
+		UE_LOG(LogAnimTexture, Warning,
+			TEXT("SetBrushFromAnimatedTexture: Image is null; nothing to do."));
+		return;
+	}
+
+	// SetBrushResourceObject 走 Brush.ResourceObject 通用通道，对 UTexture 派生类
+	// 都成立；这是相对于 SetBrushFromTexture(UTexture2D*) 的关键差异点。
+	Image->SetBrushResourceObject(Texture);
+
+	if (bMatchSize && Texture)
+	{
+		Image->SetBrushSize(FVector2D(
+			Texture->GetSurfaceWidth(),
+			Texture->GetSurfaceHeight()));
+	}
 }

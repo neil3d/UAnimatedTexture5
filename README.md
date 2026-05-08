@@ -75,7 +75,7 @@ void UMyUserWidget::LoadLocalGif()
     if (Texture)
     {
         // Assign to UMG Image's Brush.ResourceObject, or use as Texture parameter in a Material Instance.
-        MyImage->SetBrushFromTexture(Cast<UTexture2D>(Texture), /*bMatchSize=*/ true);
+        UAnimatedTextureFunctionLibrary::SetBrushFromAnimatedTexture(MyImage, Texture, /*bMatchSize=*/ true);
     }
     else
     {
@@ -90,6 +90,7 @@ void UMyUserWidget::LoadLocalGif()
 - **Download Animated Texture** — downloads a `.gif` / `.webp` from an HTTP(S) URL. Inputs: `Url`, `Timeout` (default 30s), `Max Bytes` (default 32 MiB). Output pins: `On Success (Texture, Url, ETag)`, `On Canceled`, `On Failed (Error)`.
 - **Cancel** — a Blueprint-callable method on the download node; will trigger `On Canceled` exactly once.
 - **Load Animated Texture From Memory** — synchronous helper accepting a byte array (e.g. bytes read from Pak or a custom network protocol).
+- **Set Brush from Animated Texture** — assigns a `UAnimatedTexture2D` to a UMG `Image` widget's brush. Inputs: `Image`, `Texture`, `Match Size` (optional). Use this instead of the engine's `Set Brush from Texture`.
 
 ![blueprint_nodes.png](Docs/images/blueprint_nodes.png)
 
@@ -112,6 +113,7 @@ void UMyUserWidget::LoadLocalGif()
 - [x] `LoadAnimatedTextureFromFile` with absolute path works.
 - [x] `LoadAnimatedTextureFromFile` with `ProjectDir`-relative path works.
 - [x] HTTP download: 200 OK → `OnSuccess`.
+- [x] `SetBrushFromAnimatedTexture` (C++ / Blueprint) — UMG Image displays and ticks the animation; `Match Size` matches decoder's surface size.
 
 ## License
 

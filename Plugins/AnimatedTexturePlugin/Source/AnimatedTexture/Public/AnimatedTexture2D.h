@@ -28,7 +28,25 @@ enum class EAnimatedTextureType : uint8
 
 /**
  * Animated Texture
- * @see class UTexture2D
+ *
+ * 设计说明（基类选择）：
+ *   本类刻意派生自 UTexture，**既不**派生自 UTexture2D，**也不**派生自 UTexture2DDynamic。
+ *   - 不选 UTexture2D：避免 FTextureSource / PlatformData / Mip Streaming /
+ *     默认 Texture Editor 这一坨"导入纹理"专用机制；它们对 GIF/WebP 帧缓冲毫无意义，
+ *     还要写一堆 override 才能不崩。
+ *   - 不选 UTexture2DDynamic：UPROPERTY 字段会与父类 SamplerXAddress/SizeX/Format
+ *     等冗余，且已有 .uasset 资产需要带 PostLoad 回填的迁移路径，跨 5.3-5.7 回归成本
+ *     远大于"省掉一个 30 行 UMG 包装函数"的收益。
+ *
+ *   本类与引擎里 UTexture2DDynamic / UMediaTexture / UTextureRenderTarget2D 一样，
+ *   都是"非可流式、运行时动态更新的 2D 纹理"路径。详细背景与对照见
+ *   `Docs/BaseClassChoice.md`。
+ *
+ * UMG 使用提示：
+ *   UImage::SetBrushFromTexture 形参是 UTexture2D*，会拒绝本类型。请改用
+ *   UAnimatedTextureFunctionLibrary::SetBrushFromAnimatedTexture（C++ 与蓝图均可）。
+ *
+ * @see class UTexture2DDynamic
  */
 UCLASS(BlueprintType, Category = AnimatedTexture)
 class ANIMATEDTEXTURE_API UAnimatedTexture2D : public UTexture, public FTickableGameObject

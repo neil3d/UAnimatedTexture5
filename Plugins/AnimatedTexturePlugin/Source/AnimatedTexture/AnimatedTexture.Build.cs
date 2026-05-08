@@ -42,7 +42,8 @@ public class AnimatedTexture : ModuleRules
 				"RHI",
 				"RenderCore",
 				"HTTP",
-				"ImageWrapper"	// 用于 at.DumpFrames CVar 把每帧编码为 PNG 写盘做诊断
+				"ImageWrapper",	// 用于 at.DumpFrames CVar 把每帧编码为 PNG 写盘做诊断
+				"UMG"	// SetBrushFromAnimatedTexture: UImage / FSlateBrush 写入
 			}
 			);
 		

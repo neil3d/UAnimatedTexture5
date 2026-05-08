@@ -18,6 +18,8 @@
 #include "AnimatedTextureLoadTypes.h"
 #include "AnimatedTextureFunctionLibrary.generated.h"
 
+class UImage;
+
 /**
  * UAnimatedTextureFunctionLibrary
  *
@@ -75,4 +77,25 @@ public:
 	static UAnimatedTexture2D* LoadAnimatedTextureFromFile(
 		const FString& FilePath,
 		EAnimatedTextureLoadError& OutError);
+
+	/**
+	 * 把 UAnimatedTexture2D 设置到 UMG 的 UImage 控件上。
+	 *
+	 * 为什么需要这个包装：
+	 *   引擎的 UImage::SetBrushFromTexture 形参类型是 UTexture2D*，而
+	 *   UAnimatedTexture2D 派生自 UTexture（不是 UTexture2D），所以
+	 *   Cast<UTexture2D>(animTex) 在运行时会返回 nullptr，结果是 Brush 被清空、
+	 *   控件显示为空。本函数通过 SetBrushResourceObject 走通用路径，避免类型陷阱。
+	 *   设计背景见 Docs/BaseClassChoice.md。
+	 *
+	 * @param Image       目标 UImage；为 nullptr 时函数无副作用并打 warning log。
+	 * @param Texture     要绑定的动画纹理；为 nullptr 时把 Brush.ResourceObject 清空。
+	 * @param bMatchSize  若为 true 且 Texture 有效，按解码后的纹理尺寸更新 Brush.ImageSize。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "AnimatedTexture|UMG",
+		meta = (DisplayName = "Set Brush from Animated Texture"))
+	static void SetBrushFromAnimatedTexture(
+		UImage* Image,
+		UAnimatedTexture2D* Texture,
+		bool bMatchSize = false);
 };
