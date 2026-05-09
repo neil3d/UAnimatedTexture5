@@ -54,79 +54,80 @@ class ANIMATEDTEXTURE_API UAnimatedTexture2D : public UTexture, public FTickable
 	GENERATED_BODY()
 
 public:
-	UAnimatedTexture2D(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+	explicit UAnimatedTexture2D(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-public:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture, meta = (DisplayName = "X-axis Tiling Method"), AssetRegistrySearchable, AdvancedDisplay)
-		TEnumAsByte<enum TextureAddress> AddressX;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture,
+		meta = (DisplayName = "X-axis Tiling Method"), AssetRegistrySearchable, AdvancedDisplay)
+	TEnumAsByte<enum TextureAddress> AddressX;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture, meta = (DisplayName = "Y-axis Tiling Method"), AssetRegistrySearchable, AdvancedDisplay)
-		TEnumAsByte<enum TextureAddress> AddressY;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture,
+		meta = (DisplayName = "Y-axis Tiling Method"), AssetRegistrySearchable, AdvancedDisplay)
+	TEnumAsByte<enum TextureAddress> AddressY;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture)
-		bool SupportsTransparency = true;
+	bool SupportsTransparency = true;
 
 	// 开启（默认，与历史行为一致）：CreateResource 后由解码器结果覆盖上面的 SupportsTransparency。
 	// 关闭：尊重用户在 Inspector / 蓝图里设置的 SupportsTransparency 值，不被运行期检测覆盖；
 	//   适用于"明知文件没透明像素但仍想走 alpha 通道"或反之的边缘场景。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture, AdvancedDisplay)
-		bool bAutoDetectTransparency = true;
+	bool bAutoDetectTransparency = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture)
-		float DefaultFrameDelay = 1.0f / 10;	// used while Frame.Delay==0
+	float DefaultFrameDelay = 1.0f / 10; // used while Frame.Delay==0
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture)
-		float PlayRate = 1.0f;
+	float PlayRate = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture)
-		bool bLooping = true;
+	bool bLooping = true;
 
 	// 若开启，并且文件比特流声明了有限的 loop_count（>0），
 	// 在播放完该次数后将自动停止；声明为 0（无限）的文件不受影响。
 	// 仅 WebP 暴露 loop_count；GIF 当前不解析 NETSCAPE2.0 应用扩展，开启后等价于无限。
 	// 默认关闭以保持与历史版本一致的行为。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture, AdvancedDisplay)
-		bool bRespectFileLoopCount = false;
+	bool bRespectFileLoopCount = false;
 
 	// 启用 libwebp 多线程解码（WebPAnimDecoderOptions::use_threads）。
 	// 对较大的 WebP 动画通常能减少单帧解码耗时；GIF 解码器忽略此开关。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture, AdvancedDisplay)
-		bool bUseMultithreadedDecode = false;
+	bool bUseMultithreadedDecode = false;
 
 	// 启用预乘 alpha (MODE_bgrA)。开启后必须搭配使用 (One, OneMinusSrcAlpha)
 	// 的混合方式才能得到正确合成；保持关闭则与原有材质工作流兼容。仅 WebP 生效。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture, AdvancedDisplay)
-		bool bPremultipliedAlpha = false;
+	bool bPremultipliedAlpha = false;
 
-public:	// Playback APIs
+public: // Playback APIs
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
-		void Play();
-
-	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
-		void PlayFromStart();
+	void Play();
 
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
-		void Stop();
+	void PlayFromStart();
 
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
-		bool IsPlaying() const { return bPlaying; }
+	void Stop();
 
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
-		void SetLooping(bool bNewLooping) { bLooping = bNewLooping; }
+	bool IsPlaying() const { return bPlaying; }
 
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
-		bool IsLooping() const { return bLooping; }
+	void SetLooping(bool bNewLooping) { bLooping = bNewLooping; }
 
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
-		void SetPlayRate(float NewRate) { PlayRate = NewRate; }
+	bool IsLooping() const { return bLooping; }
 
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
-		float GetPlayRate() const { return PlayRate; }
+	void SetPlayRate(float NewRate) { PlayRate = NewRate; }
 
 	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
-		float GetAnimationLength() const;
+	float GetPlayRate() const { return PlayRate; }
 
-public:	// UTexture Interface
+	UFUNCTION(BlueprintCallable, Category = AnimatedTexture)
+	float GetAnimationLength() const;
+
+public: // UTexture Interface
 	virtual float GetSurfaceWidth() const override;
 	virtual float GetSurfaceHeight() const override;
 	virtual float GetSurfaceDepth() const override { return 0; }
@@ -152,8 +153,9 @@ public:	// UTexture Interface
 	 */
 	bool HasAlphaChannel() const { return SupportsTransparency; }
 
-public:	// FTickableGameObject Interface
+public: // FTickableGameObject Interface
 	virtual void Tick(float DeltaTime) override;
+
 	virtual bool IsTickable() const override
 	{
 		// 收紧 Tick 调度门槛：CDO/Archetype、未 CreateResource 或已 Stop 的实例都不进
@@ -161,20 +163,23 @@ public:	// FTickableGameObject Interface
 		// 应对 Stop 与 Tick 同帧调度的窗口期。
 		return !IsTemplate() && Decoder.IsValid() && bPlaying;
 	}
-	virtual TStatId GetStatId() const
+
+	virtual TStatId GetStatId() const override
 	{
 		RETURN_QUICK_DECLARE_CYCLE_STAT(UAnimatedTexture2D, STATGROUP_Tickables);
 	}
-	virtual bool IsTickableInEditor() const
+
+	virtual bool IsTickableInEditor() const override
 	{
 		return true;
 	}
 
-	virtual UWorld* GetTickableGameObjectWorld() const
+	virtual UWorld* GetTickableGameObjectWorld() const override
 	{
 		return GetWorld();
 	}
-public:	// UObject Interface.
+
+public: // UObject Interface.
 	virtual void PostLoad() override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -202,10 +207,10 @@ public: // Internal APIs
 
 private:
 	UPROPERTY()
-		EAnimatedTextureType FileType = EAnimatedTextureType::None;
+	EAnimatedTextureType FileType = EAnimatedTextureType::None;
 
 	UPROPERTY()
-		TArray<uint8> FileBlob;
+	TArray<uint8> FileBlob;
 
 private:
 	// 仅 GameThread 访问（CreateResource / Tick / RenderFrameToTexture），

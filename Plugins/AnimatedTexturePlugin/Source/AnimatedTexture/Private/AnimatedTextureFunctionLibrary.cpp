@@ -177,7 +177,8 @@ void UAnimatedTextureFunctionLibrary::SetBrushFromAnimatedTexture(
 
 	if (bMatchSize && Texture)
 	{
-		Image->SetBrushSize(FVector2D(
+		// UE5 起 SetBrushSize 已弃用，改用 SetDesiredSizeOverride 控制 UImage 尺寸。
+		Image->SetDesiredSizeOverride(FVector2D(
 			Texture->GetSurfaceWidth(),
 			Texture->GetSurfaceHeight()));
 	}

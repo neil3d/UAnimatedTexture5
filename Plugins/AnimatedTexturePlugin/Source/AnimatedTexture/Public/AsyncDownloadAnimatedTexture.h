@@ -48,7 +48,7 @@ public:
 	 * 构造函数：在对象创建时即 AddToRoot，避免 NewObject -> Activate 之间的窗口期被 GC。
 	 * 对 CDO 跳过 AddToRoot（参考引擎 UAsyncTaskDownloadImage 的做法）。
 	 */
-	UAsyncDownloadAnimatedTexture(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+	explicit UAsyncDownloadAnimatedTexture(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	UPROPERTY(BlueprintAssignable)
 	FAnimatedTextureDownloadSuccess OnSuccess;
@@ -104,5 +104,5 @@ private:
 	// 完成标志：Cancel / HandleComplete / HandleError 三方共享。
 	// 通过 Exchange(true) 一次性"领取"完成权，保证终态广播与 RemoveFromRoot 只发生一次。
 	// 任意线程可写（Cancel 允许任意线程调用）。
-	TAtomic<bool> bFinished{ false };
+	TAtomic<bool> bFinished{false};
 };
