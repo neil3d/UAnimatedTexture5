@@ -59,40 +59,26 @@ void UMtlExpTextureSampleParameterAnim::GetCaption(TArray<FString>& OutCaptions)
 #if WITH_EDITOR
 bool UMtlExpTextureSampleParameterAnim::TextureIsValid(UTexture* InTexture, FString& OutMessage)
 {
-	bool Result = false;
-	if (InTexture)
+	if (!InTexture)
 	{
-		if (InTexture->IsA(UAnimatedTexture2D::StaticClass()))
-		{
-			Result = true;
-		}
-
-		if (InTexture->IsA(UTexture2D::StaticClass()))
-		{
-			Result = true;
-		}
-		if (InTexture->IsA(UTextureRenderTarget2D::StaticClass()))
-		{
-			Result = true;
-		}
-		if (InTexture->IsA(UTexture2DDynamic::StaticClass()))
-		{
-			Result = true;
-		}
-		if (InTexture->GetMaterialType() == MCT_TextureExternal)
-		{
-			Result = true;
-		}
-
-		if (!Result)
-			OutMessage = TEXT("Invalid texture type");
-	}
-	else
-	{
-		OutMessage = TEXT("NULL Textue");
+		OutMessage = TEXT("NULL Texture");
+		return false;
 	}
 
-	return Result;
+	// 白名单 = UAnimatedTexture2D（本插件类型）+ UE 5.3 Parameter2D 引擎默认接受的全部 2D 类型。
+	// 父类 UMaterialExpressionTextureSampleParameter::TextureIsValid 直接返回 false（abstract-style），
+	// 无法通过 Super 委托复用 Parameter2D 的逻辑，这里只能手写镜像。
+	if (InTexture->IsA<UAnimatedTexture2D>()
+		|| InTexture->IsA<UTexture2D>()
+		|| InTexture->IsA<UTextureRenderTarget2D>()
+		|| InTexture->IsA<UTexture2DDynamic>()
+		|| InTexture->GetMaterialType() == MCT_TextureExternal)
+	{
+		return true;
+	}
+
+	OutMessage = TEXT("Invalid texture type");
+	return false;
 }
 
 void UMtlExpTextureSampleParameterAnim::SetDefaultTexture()

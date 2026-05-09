@@ -33,6 +33,27 @@ static TAutoConsoleVariable<int32> CVarDumpFrames(
 	TEXT("Dump each rendered animated-texture frame as PNG to <Saved>/AnimatedTextureDump/. 0=off, !=0=on."),
 	ECVF_Default);
 
+UAnimatedTexture2D::UAnimatedTexture2D(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	// 本类是"非可流式、运行期动态更新"纹理（与 UTexture2DDynamic / UMediaTexture / RenderTarget 同类），
+	// 没有 Mip 金字塔；显式禁用流式以免 streamer 对不存在的 mips 做额外检查。
+	// 详见 Docs/BaseClassChoice.md §3.3。
+	NeverStream = true;
+}
+
+void UAnimatedTexture2D::PostLoad()
+{
+	Super::PostLoad();
+
+	// 防御：早期版本可能保存了 NeverStream=false 的 .uasset；统一纠正。
+	// 当前插件实例多为运行期 NewObject 构造，PostLoad 仅在用户保存为静态资产时触发。
+	if (!NeverStream)
+	{
+		NeverStream = true;
+	}
+}
+
 float UAnimatedTexture2D::GetSurfaceWidth() const
 {
 	if (Decoder) return Decoder->GetWidth();
@@ -55,12 +76,12 @@ FTextureResource* UAnimatedTexture2D::CreateResource()
 	switch (FileType)
 	{
 	case EAnimatedTextureType::Gif:
-		Decoder = MakeShared<FGIFDecoder, ESPMode::ThreadSafe>();
+		Decoder = MakeShared<FGIFDecoder>();
 		break;
 	case EAnimatedTextureType::Webp:
 		{
-			TSharedRef<FWebpDecoder, ESPMode::ThreadSafe> WebpDecoder
-				= MakeShared<FWebpDecoder, ESPMode::ThreadSafe>();
+			TSharedRef<FWebpDecoder> WebpDecoder
+				= MakeShared<FWebpDecoder>();
 			// 必须在 LoadFromMemory 之前赋值，下面会读到这两个开关。
 			WebpDecoder->bUseThreads = bUseMultithreadedDecode;
 			WebpDecoder->bPremultipliedAlpha = bPremultipliedAlpha;
@@ -73,7 +94,20 @@ FTextureResource* UAnimatedTexture2D::CreateResource()
 	if (Decoder->LoadFromMemory(FileBlob.GetData(), FileBlob.Num()))
 	{
 		AnimationLength = Decoder->GetDuration(DefaultFrameDelay * 1000) / 1000.0f;
-		SupportsTransparency = Decoder->SupportsTransparency();
+
+		// bAutoDetectTransparency 开启（默认）时，覆写 SupportsTransparency 为解码器探测结果；
+		// 关闭时尊重用户在 Inspector / 蓝图里设置的值，作为强制开/关透明合成的逃生口。
+		if (bAutoDetectTransparency)
+		{
+			SupportsTransparency = Decoder->SupportsTransparency();
+		}
+
+		// 重入时复位播放上下文：UTexture::UpdateResource / 编辑器 Reimport / PostEditChangeProperty
+		// 都会走 CreateResource。残留的旧 FrameTime/FrameDelay/FrameDumpCounter 会让重入后第一帧
+		// 节奏不稳；bPlaying 不动以尊重用户上次的播放/暂停状态。
+		FrameTime = 0.0f;
+		FrameDelay = 0.0f;
+		FrameDumpCounter = 0;
 	}
 	else
 	{

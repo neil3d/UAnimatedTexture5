@@ -54,6 +54,9 @@ class ANIMATEDTEXTURE_API UAnimatedTexture2D : public UTexture, public FTickable
 	GENERATED_BODY()
 
 public:
+	UAnimatedTexture2D(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture, meta = (DisplayName = "X-axis Tiling Method"), AssetRegistrySearchable, AdvancedDisplay)
 		TEnumAsByte<enum TextureAddress> AddressX;
 
@@ -62,6 +65,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture)
 		bool SupportsTransparency = true;
+
+	// 开启（默认，与历史行为一致）：CreateResource 后由解码器结果覆盖上面的 SupportsTransparency。
+	// 关闭：尊重用户在 Inspector / 蓝图里设置的 SupportsTransparency 值，不被运行期检测覆盖；
+	//   适用于"明知文件没透明像素但仍想走 alpha 通道"或反之的边缘场景。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture, AdvancedDisplay)
+		bool bAutoDetectTransparency = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AnimatedTexture)
 		float DefaultFrameDelay = 1.0f / 10;	// used while Frame.Delay==0
@@ -150,6 +159,7 @@ public:	// FTickableGameObject Interface
 		return GetWorld();
 	}
 public:	// UObject Interface.
+	virtual void PostLoad() override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif // WITH_EDITOR
@@ -182,7 +192,9 @@ private:
 		TArray<uint8> FileBlob;
 
 private:
-	TSharedPtr<FAnimatedTextureDecoder, ESPMode::ThreadSafe> Decoder;
+	// 仅 GameThread 访问（CreateResource / Tick / RenderFrameToTexture），
+	// 不需要 ThreadSafe 引用计数；强引用降级为默认 ESPMode 省一次原子开销。
+	TSharedPtr<FAnimatedTextureDecoder> Decoder;
 
 	float AnimationLength = 0.0f;
 	float FrameDelay = 0.0f;
