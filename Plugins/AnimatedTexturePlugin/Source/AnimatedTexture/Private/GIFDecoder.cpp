@@ -662,6 +662,24 @@ bool FGIFDecoder::SupportsTransparency() const
 
 FColor FGIFDecoder::ResolveBgColorFromMetadata() const
 {
+	// Modern browser convention（Chrome / Firefox / Safari）：
+	// 一旦 GIF 任意一帧声明了 transparent index，就认为画布初始化与
+	// DISPOSE_BACKGROUND 都应该清成 (0,0,0,0)——而不是 GIF89a 严格规范说的
+	// SColorMap[SBackGroundColor]。理由：90%+ 透明 GIF 的作者把 bg 索引留成
+	// 调色板里某个不透明颜色（白/黑/灰），但作品意图是透明背景；严格按规范
+	// 走会让透明区域变成不透明白/灰，与浏览器及 Photoshop 预览不一致，并使
+	// CompositeRow 跳过的 transparent 像素继承到不透明 bg、DISPOSE_BACKGROUND
+	// 把帧间擦除区也填成不透明 bg，整张 GIF 看起来"没有 alpha 通道"。
+	// DisposeFrame / RestoreSnapshot fallback / Reset 都复用 ResolvedBgColor，
+	// 所以这一处对齐到透明，下面三个路径会自动跟随。
+	if (bHasTransparency)
+	{
+		return FColor(0, 0, 0, 0);
+	}
+
+	// 完全不透明 GIF（任何帧都没声明 transparent）：按 GIF89a 规范走
+	// SBackGroundColor → SColorMap 查表。这部分像素本来就没 alpha 通道含义，
+	// 给 alpha=255 不会有视觉副作用，能与极少数依赖 bg 颜色的素材保持兼容。
 	if (!GIF || !GIF->SColorMap)
 	{
 		return FColor(0, 0, 0, 0);
@@ -671,16 +689,6 @@ FColor FGIFDecoder::ResolveBgColorFromMetadata() const
 	if (BgIdx < 0 || BgIdx >= GIF->SColorMap->ColorCount)
 	{
 		return FColor(0, 0, 0, 0);
-	}
-
-	// 扫描所有帧的 GCB transparent index：若 bg 索引被任何一帧用作 transparent，
-	// 则 GIF 作者意图是"bg 即透明"（welcome2 / x-trans / Eokxd 都是这种），用透明。
-	for (const FFrameMeta& M : Frames)
-	{
-		if (M.Transparent == BgIdx)
-		{
-			return FColor(0, 0, 0, 0);
-		}
 	}
 
 	const GifColorType& Entry = GIF->SColorMap->Colors[BgIdx];

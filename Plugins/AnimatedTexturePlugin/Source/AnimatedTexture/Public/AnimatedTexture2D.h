@@ -136,6 +136,22 @@ public:	// UTexture Interface
 	virtual FTextureResource* CreateResource() override;
 	virtual EMaterialValueType GetMaterialType() const override { return MCT_Texture2D; }
 
+	/**
+	 * 与 UTexture2D::HasAlphaChannel 同名同签名（**非虚函数**）。
+	 *
+	 * 设计说明：UTexture 基类不暴露 virtual HasAlphaChannel，UTexture2D 才有这个方法且非虚。
+	 * 因此本方法**无法用 override 覆盖父类 vtable**——engine 内部以 UTexture* 持有的代码
+	 * 走不到这里。提供它的目的是：
+	 *   1) 让显式持有 UAnimatedTexture2D*（包括蓝图/插件下游代码）的调用方能直接拿到真实答案；
+	 *   2) 与引擎其它纹理类的 API 表面保持对称，便于阅读 / 复制粘贴；
+	 *   3) 避免默认 fall-through 到 UTexture 上没有此方法导致 Cast<UTexture2D>(at)->HasAlphaChannel()
+	 *      返回的 false 被误用作"无 alpha"判定。
+	 *
+	 * 返回值跟随 SupportsTransparency；CreateResource 阶段若 bAutoDetectTransparency 为真，
+	 * SupportsTransparency 会被解码器探测结果覆盖，所以与解码器/RHI 实际像素 alpha 对齐。
+	 */
+	bool HasAlphaChannel() const { return SupportsTransparency; }
+
 public:	// FTickableGameObject Interface
 	virtual void Tick(float DeltaTime) override;
 	virtual bool IsTickable() const override

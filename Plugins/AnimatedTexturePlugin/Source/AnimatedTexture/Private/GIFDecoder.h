@@ -81,11 +81,12 @@ private:
 	void RestoreSnapshot(const FIntRect& Rect);
 
 	// 计算"画布初始化 / DISPOSE_BACKGROUND 清理"应使用的填充颜色。
-	// 启发式（兼容 Chrome/Firefox 行为同时尽量接近 GIF89a 规范）：
-	//   - 若 SColorMap 为空 / SBackGroundColor 越界 → (0,0,0,0) 透明
-	//   - 若 SBackGroundColor 被任何一帧用作 transparent index → (0,0,0,0) 透明
+	// 策略对齐现代浏览器（Chrome/Firefox/Safari）而非 GIF89a 严格规范：
+	//   - 若 bHasTransparency（任意帧声明了 transparent index） → (0,0,0,0) 透明
+	//   - 否则若 SColorMap 为空 / SBackGroundColor 越界 → (0,0,0,0) 透明
 	//   - 否则按规范取 SColorMap->Colors[SBackGroundColor]，alpha=255
-	// 流式版本：直接读 Frames[i].Transparent，不再依赖 GIF->SavedImages。
+	// 关键不变量：DisposeFrame / RestoreSnapshot fallback / Reset 都复用
+	// ResolvedBgColor，所以这一处确定的颜色会自动决定上述三条路径的行为。
 	FColor ResolveBgColorFromMetadata() const;
 
 	// LoadFromMemory 阶段：预扫描整个文件，填充
