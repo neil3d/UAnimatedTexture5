@@ -48,27 +48,27 @@ bool FGIFDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize)
 		return false;
 	}
 
-	mInputCursor.Begin = InBuffer;
-	mInputCursor.Cur = InBuffer;
-	mInputCursor.End = InBuffer + InBufferSize;
+	InputCursor.Begin = InBuffer;
+	InputCursor.Cur = InBuffer;
+	InputCursor.End = InBuffer + InBufferSize;
 
 	int gifError = 0;
-	mGIF = DGifOpen(&mInputCursor, _GIF_InputFunc, &gifError);
-	if (mGIF == nullptr)
+	GIF = DGifOpen(&InputCursor, _GIF_InputFunc, &gifError);
+	if (GIF == nullptr)
 	{
 		FString Error(GifErrorString(gifError));
 		UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: GIF file open failed, %s."), *Error);
-		mInputCursor = FInputCursor();
+		InputCursor = FInputCursor();
 		return false;
 	}
 
-	if (mGIF->SWidth <= 0 || mGIF->SHeight <= 0)
+	if (GIF->SWidth <= 0 || GIF->SHeight <= 0)
 	{
-		UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: invalid canvas size %dx%d."), mGIF->SWidth, mGIF->SHeight);
+		UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: invalid canvas size %dx%d."), GIF->SWidth, GIF->SHeight);
 		return false;
 	}
 
-	// 预扫描：走完整个文件，填好 mFrames / mLoopCountFromFile / mbHasTransparency。
+	// 预扫描：走完整个文件，填好 Frames / LoopCountFromFile / bHasTransparency。
 	// 不解任何 LZW 像素；只跳过数据 sub-blocks 推进 cursor。
 	if (!ScanMetadata())
 	{
@@ -76,44 +76,44 @@ bool FGIFDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize)
 		return false;
 	}
 
-	// 解析背景色（依赖 mFrames 已就绪）。
-	mResolvedBgColor = ResolveBgColorFromMetadata();
+	// 解析背景色（依赖 Frames 已就绪）。
+	ResolvedBgColor = ResolveBgColorFromMetadata();
 
-	const int32 PixelCount = mGIF->SWidth * mGIF->SHeight;
-	mFrameBuffer.Init(mResolvedBgColor, PixelCount);
-	mLineBuffer.SetNumUninitialized(mGIF->SWidth);
+	const int32 PixelCount = GIF->SWidth * GIF->SHeight;
+	FrameBuffer.Init(ResolvedBgColor, PixelCount);
+	LineBuffer.SetNumUninitialized(GIF->SWidth);
 
-	mCurrentFrame = 0;
-	mLoopCount = 0;
-	mPrevDisposalMode = DISPOSAL_UNSPECIFIED;
-	mPrevRect = FIntRect();
-	mPrevTransparentColor = NO_TRANSPARENT_COLOR;
-	mSnapshotBuffer.Empty();
+	CurrentFrame = 0;
+	LoopCount = 0;
+	PrevDisposalMode = DISPOSAL_UNSPECIFIED;
+	PrevRect = FIntRect();
+	PrevTransparentColor = NO_TRANSPARENT_COLOR;
+	SnapshotBuffer.Empty();
 
 	// 诊断日志：dump GIF 元数据 + 每帧结构（默认 Verbose 级别，需 `Log LogAnimTexture Verbose`）。
-	// 流式版本：所有信息从 mFrames 读，不再触碰 mGIF->SavedImages（流式模式下它一直为空）。
+	// 流式版本：所有信息从 Frames 读，不再触碰 GIF->SavedImages（流式模式下它一直为空）。
 	if (UE_LOG_ACTIVE(LogAnimTexture, Verbose))
 	{
-		const int32 GctSize = mGIF->SColorMap ? mGIF->SColorMap->ColorCount : 0;
+		const int32 GctSize = GIF->SColorMap ? GIF->SColorMap->ColorCount : 0;
 		FString BgDescription;
-		if (mResolvedBgColor.A == 0)
+		if (ResolvedBgColor.A == 0)
 		{
-			BgDescription = FString::Printf(TEXT("transparent (bg=%d, gct=%d)"), mGIF->SBackGroundColor, GctSize);
+			BgDescription = FString::Printf(TEXT("transparent (bg=%d, gct=%d)"), GIF->SBackGroundColor, GctSize);
 		}
 		else
 		{
 			BgDescription = FString::Printf(TEXT("(R=%u,G=%u,B=%u,A=255) from gct[%d]"),
-				mResolvedBgColor.R, mResolvedBgColor.G, mResolvedBgColor.B, mGIF->SBackGroundColor);
+				ResolvedBgColor.R, ResolvedBgColor.G, ResolvedBgColor.B, GIF->SBackGroundColor);
 		}
 
 		UE_LOG(LogAnimTexture, Verbose,
 			TEXT("FGIFDecoder: loaded canvas=%dx%d gct=%d bg-idx=%d resolved-bg=%s frames=%d loop_count=%u"),
-			mGIF->SWidth, mGIF->SHeight, GctSize, mGIF->SBackGroundColor, *BgDescription,
-			mFrames.Num(), mLoopCountFromFile);
+			GIF->SWidth, GIF->SHeight, GctSize, GIF->SBackGroundColor, *BgDescription,
+			Frames.Num(), LoopCountFromFile);
 
-		for (int i = 0; i < mFrames.Num(); i++)
+		for (int i = 0; i < Frames.Num(); i++)
 		{
-			const FFrameMeta& M = mFrames[i];
+			const FFrameMeta& M = Frames[i];
 			UE_LOG(LogAnimTexture, Verbose,
 				TEXT("  frame[%3d] rect=(%4d,%4d)->(%4d,%4d) %s disp=%d delay=%dms trans=%d"),
 				i, M.Rect.Min.X, M.Rect.Min.Y, M.Rect.Max.X, M.Rect.Max.Y,
@@ -121,39 +121,39 @@ bool FGIFDecoder::LoadFromMemory(const uint8* InBuffer, uint32 InBufferSize)
 		}
 	}
 
-	// 关闭预扫的 mGIF 并重新 DGifOpen，让 cursor 回卷到 ScreenDesc 之后；
+	// 关闭预扫的 GIF 并重新 DGifOpen，让 cursor 回卷到 ScreenDesc 之后；
 	// LZW 状态机随之全量重置。NextFrame 从首帧开始。
 	return RewindToFirstRecord();
 }
 
 void FGIFDecoder::Close()
 {
-	if (mGIF)
+	if (GIF)
 	{
 		int error = 0;
-		DGifCloseFile(mGIF, &error);
-		mGIF = nullptr;
+		DGifCloseFile(GIF, &error);
+		GIF = nullptr;
 	}
 
-	mFrameBuffer.Empty();
-	mSnapshotBuffer.Empty();
-	mLineBuffer.Empty();
-	mFrames.Empty();
-	mInputCursor = FInputCursor();
+	FrameBuffer.Empty();
+	SnapshotBuffer.Empty();
+	LineBuffer.Empty();
+	Frames.Empty();
+	InputCursor = FInputCursor();
 
-	mCurrentFrame = 0;
-	mLoopCount = 0;
-	mPrevDisposalMode = DISPOSAL_UNSPECIFIED;
-	mPrevRect = FIntRect();
-	mPrevTransparentColor = NO_TRANSPARENT_COLOR;
-	mResolvedBgColor = FColor(0, 0, 0, 0);
-	mLoopCountFromFile = 0;
-	mbHasTransparency = false;
+	CurrentFrame = 0;
+	LoopCount = 0;
+	PrevDisposalMode = DISPOSAL_UNSPECIFIED;
+	PrevRect = FIntRect();
+	PrevTransparentColor = NO_TRANSPARENT_COLOR;
+	ResolvedBgColor = FColor(0, 0, 0, 0);
+	LoopCountFromFile = 0;
+	bHasTransparency = false;
 }
 
 bool FGIFDecoder::ScanMetadata()
 {
-	if (!mGIF)
+	if (!GIF)
 	{
 		return false;
 	}
@@ -164,10 +164,10 @@ bool FGIFDecoder::ScanMetadata()
 
 	while (true)
 	{
-		if (DGifGetRecordType(mGIF, &RecordType) == GIF_ERROR)
+		if (DGifGetRecordType(GIF, &RecordType) == GIF_ERROR)
 		{
 			UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: ScanMetadata GetRecordType failed: %s"),
-				*FString(GifErrorString(mGIF->Error)));
+				*FString(GifErrorString(GIF->Error)));
 			return false;
 		}
 
@@ -180,7 +180,7 @@ bool FGIFDecoder::ScanMetadata()
 		{
 			int ExtCode = 0;
 			GifByteType* ExtData = nullptr;
-			if (DGifGetExtension(mGIF, &ExtCode, &ExtData) == GIF_ERROR)
+			if (DGifGetExtension(GIF, &ExtCode, &ExtData) == GIF_ERROR)
 			{
 				UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: ScanMetadata GetExtension failed."));
 				return false;
@@ -199,13 +199,13 @@ bool FGIFDecoder::ScanMetadata()
 					bHasPendingGCB = true;
 					if (Pending.Transparent != NO_TRANSPARENT_COLOR)
 					{
-						mbHasTransparency = true;
+						bHasTransparency = true;
 					}
 				}
 				// drain 后续 sub-blocks（GCB 通常只有一段，但还是按规范读到 NULL）。
 				while (true)
 				{
-					if (DGifGetExtensionNext(mGIF, &ExtData) == GIF_ERROR)
+					if (DGifGetExtensionNext(GIF, &ExtData) == GIF_ERROR)
 					{
 						UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: drain GCB sub-blocks failed."));
 						return false;
@@ -226,7 +226,7 @@ bool FGIFDecoder::ScanMetadata()
 				// 其它扩展（COMMENT / PLAINTEXT / ...）：drain 全部 sub-blocks。
 				while (true)
 				{
-					if (DGifGetExtensionNext(mGIF, &ExtData) == GIF_ERROR)
+					if (DGifGetExtensionNext(GIF, &ExtData) == GIF_ERROR)
 					{
 						UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: drain ext sub-blocks failed."));
 						return false;
@@ -240,16 +240,16 @@ bool FGIFDecoder::ScanMetadata()
 		}
 		else if (RecordType == IMAGE_DESC_RECORD_TYPE)
 		{
-			if (DGifGetImageDesc(mGIF) == GIF_ERROR)
+			if (DGifGetImageDesc(GIF) == GIF_ERROR)
 			{
 				UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: ScanMetadata GetImageDesc failed: %s"),
-					*FString(GifErrorString(mGIF->Error)));
+					*FString(GifErrorString(GIF->Error)));
 				return false;
 			}
 
 			FFrameMeta Meta;
-			Meta.Rect = ClampRectToCanvas(mGIF->Image.Left, mGIF->Image.Top, mGIF->Image.Width, mGIF->Image.Height);
-			Meta.bInterlace = mGIF->Image.Interlace;
+			Meta.Rect = ClampRectToCanvas(GIF->Image.Left, GIF->Image.Top, GIF->Image.Width, GIF->Image.Height);
+			Meta.bInterlace = GIF->Image.Interlace;
 			if (bHasPendingGCB)
 			{
 				Meta.Disposal = Pending.Disposal;
@@ -257,7 +257,7 @@ bool FGIFDecoder::ScanMetadata()
 				Meta.Transparent = Pending.Transparent;
 			}
 			// 否则保持 FFrameMeta 默认值（DISPOSAL_UNSPECIFIED / 0 / NO_TRANSPARENT_COLOR）。
-			mFrames.Add(Meta);
+			Frames.Add(Meta);
 
 			Pending = FFrameMeta();
 			bHasPendingGCB = false;
@@ -269,7 +269,7 @@ bool FGIFDecoder::ScanMetadata()
 			GifByteType* CodeBlock = nullptr;
 			do
 			{
-				if (DGifGetCodeNext(mGIF, &CodeBlock) == GIF_ERROR)
+				if (DGifGetCodeNext(GIF, &CodeBlock) == GIF_ERROR)
 				{
 					UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: ScanMetadata drain LZW failed."));
 					return false;
@@ -280,7 +280,7 @@ bool FGIFDecoder::ScanMetadata()
 		// 已经在 dgif_lib.c 中报错返回 ERROR。
 	}
 
-	if (mFrames.Num() <= 0)
+	if (Frames.Num() <= 0)
 	{
 		UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: scan completed but no frames found."));
 		return false;
@@ -306,7 +306,7 @@ void FGIFDecoder::ParseNetscapeApplicationExt(const GifByteType* IdSubBlock)
 	GifByteType* SubBlock = nullptr;
 	while (true)
 	{
-		if (DGifGetExtensionNext(mGIF, &SubBlock) == GIF_ERROR)
+		if (DGifGetExtensionNext(GIF, &SubBlock) == GIF_ERROR)
 		{
 			UE_LOG(LogAnimTexture, Warning, TEXT("FGIFDecoder: drain APPLICATION ext sub-blocks failed."));
 			return;
@@ -322,24 +322,24 @@ void FGIFDecoder::ParseNetscapeApplicationExt(const GifByteType* IdSubBlock)
 		{
 			const uint16 Lo = SubBlock[2];
 			const uint16 Hi = SubBlock[3];
-			mLoopCountFromFile = static_cast<uint32>(Lo | (Hi << 8));
+			LoopCountFromFile = static_cast<uint32>(Lo | (Hi << 8));
 		}
 	}
 }
 
 bool FGIFDecoder::RewindToFirstRecord()
 {
-	if (mGIF)
+	if (GIF)
 	{
 		int err = 0;
-		DGifCloseFile(mGIF, &err);
-		mGIF = nullptr;
+		DGifCloseFile(GIF, &err);
+		GIF = nullptr;
 	}
-	mInputCursor.Cur = mInputCursor.Begin;
+	InputCursor.Cur = InputCursor.Begin;
 
 	int gifError = 0;
-	mGIF = DGifOpen(&mInputCursor, _GIF_InputFunc, &gifError);
-	if (mGIF == nullptr)
+	GIF = DGifOpen(&InputCursor, _GIF_InputFunc, &gifError);
+	if (GIF == nullptr)
 	{
 		FString Error(GifErrorString(gifError));
 		UE_LOG(LogAnimTexture, Error, TEXT("FGIFDecoder: rewind DGifOpen failed: %s"), *Error);
@@ -350,17 +350,17 @@ bool FGIFDecoder::RewindToFirstRecord()
 
 bool FGIFDecoder::DecodeFrameAtCursor(int FrameIndex)
 {
-	if (!mGIF)
+	if (!GIF)
 	{
 		return false;
 	}
 
-	// 跳过累积扩展（GCB / APPLICATION / COMMENT 等已被预扫缓存到 mFrames，
+	// 跳过累积扩展（GCB / APPLICATION / COMMENT 等已被预扫缓存到 Frames，
 	// 运行时不再重复处理；只需消费字节流让 cursor 落在下一个 IMAGE_DESC 上）。
 	GifRecordType Type = UNDEFINED_RECORD_TYPE;
 	while (true)
 	{
-		if (DGifGetRecordType(mGIF, &Type) == GIF_ERROR)
+		if (DGifGetRecordType(GIF, &Type) == GIF_ERROR)
 		{
 			return false;
 		}
@@ -375,13 +375,13 @@ bool FGIFDecoder::DecodeFrameAtCursor(int FrameIndex)
 		// EXTENSION_RECORD_TYPE：drain 全部 sub-blocks。
 		int ExtCode = 0;
 		GifByteType* ExtData = nullptr;
-		if (DGifGetExtension(mGIF, &ExtCode, &ExtData) == GIF_ERROR)
+		if (DGifGetExtension(GIF, &ExtCode, &ExtData) == GIF_ERROR)
 		{
 			return false;
 		}
 		while (true)
 		{
-			if (DGifGetExtensionNext(mGIF, &ExtData) == GIF_ERROR)
+			if (DGifGetExtensionNext(GIF, &ExtData) == GIF_ERROR)
 			{
 				return false;
 			}
@@ -392,14 +392,14 @@ bool FGIFDecoder::DecodeFrameAtCursor(int FrameIndex)
 		}
 	}
 
-	if (DGifGetImageDesc(mGIF) == GIF_ERROR)
+	if (DGifGetImageDesc(GIF) == GIF_ERROR)
 	{
 		UE_LOG(LogAnimTexture, Warning, TEXT("FGIFDecoder: GetImageDesc failed for frame %d"), FrameIndex);
 		return false;
 	}
 
-	const GifImageDesc& id = mGIF->Image;
-	ColorMapObject* ColorMap = id.ColorMap ? id.ColorMap : mGIF->SColorMap;
+	const GifImageDesc& id = GIF->Image;
+	ColorMapObject* ColorMap = id.ColorMap ? id.ColorMap : GIF->SColorMap;
 
 	if (id.Width <= 0 || id.Height <= 0)
 	{
@@ -409,7 +409,7 @@ bool FGIFDecoder::DecodeFrameAtCursor(int FrameIndex)
 		GifByteType* CodeBlock = nullptr;
 		do
 		{
-			if (DGifGetCodeNext(mGIF, &CodeBlock) == GIF_ERROR)
+			if (DGifGetCodeNext(GIF, &CodeBlock) == GIF_ERROR)
 			{
 				return false;
 			}
@@ -423,7 +423,7 @@ bool FGIFDecoder::DecodeFrameAtCursor(int FrameIndex)
 		GifByteType* CodeBlock = nullptr;
 		do
 		{
-			if (DGifGetCodeNext(mGIF, &CodeBlock) == GIF_ERROR)
+			if (DGifGetCodeNext(GIF, &CodeBlock) == GIF_ERROR)
 			{
 				return false;
 			}
@@ -432,14 +432,14 @@ bool FGIFDecoder::DecodeFrameAtCursor(int FrameIndex)
 	}
 
 	// 当前帧 transparent 索引：从预扫缓存读取。
-	const int Transparent = mFrames.IsValidIndex(FrameIndex)
-		? mFrames[FrameIndex].Transparent
+	const int Transparent = Frames.IsValidIndex(FrameIndex)
+		? Frames[FrameIndex].Transparent
 		: NO_TRANSPARENT_COLOR;
 
 	// 行缓冲：按当前帧子图宽度调整（GIF 子图宽度 ≤ 画布宽度，但保险起见取 max）。
-	if (mLineBuffer.Num() < id.Width)
+	if (LineBuffer.Num() < id.Width)
 	{
-		mLineBuffer.SetNumUninitialized(id.Width);
+		LineBuffer.SetNumUninitialized(id.Width);
 	}
 
 	if (id.Interlace)
@@ -453,7 +453,7 @@ bool FGIFDecoder::DecodeFrameAtCursor(int FrameIndex)
 		{
 			for (int j = InterlacedOffset[p]; j < id.Height; j += InterlacedJumps[p])
 			{
-				if (DGifGetLine(mGIF, mLineBuffer.GetData(), id.Width) == GIF_ERROR)
+				if (DGifGetLine(GIF, LineBuffer.GetData(), id.Width) == GIF_ERROR)
 				{
 					UE_LOG(LogAnimTexture, Warning,
 						TEXT("FGIFDecoder: GetLine failed in interlaced frame %d (pass=%d row=%d)"),
@@ -468,7 +468,7 @@ bool FGIFDecoder::DecodeFrameAtCursor(int FrameIndex)
 	{
 		for (int j = 0; j < id.Height; ++j)
 		{
-			if (DGifGetLine(mGIF, mLineBuffer.GetData(), id.Width) == GIF_ERROR)
+			if (DGifGetLine(GIF, LineBuffer.GetData(), id.Width) == GIF_ERROR)
 			{
 				UE_LOG(LogAnimTexture, Warning,
 					TEXT("FGIFDecoder: GetLine failed at row %d of frame %d"), j, FrameIndex);
@@ -483,7 +483,7 @@ bool FGIFDecoder::DecodeFrameAtCursor(int FrameIndex)
 
 void FGIFDecoder::CompositeRow(int srcY, int dstTop, int dstLeft, int Width, ColorMapObject* CM, int Transparent)
 {
-	if (!mGIF || !CM || mFrameBuffer.Num() == 0)
+	if (!GIF || !CM || FrameBuffer.Num() == 0)
 	{
 		return;
 	}
@@ -496,8 +496,8 @@ void FGIFDecoder::CompositeRow(int srcY, int dstTop, int dstLeft, int Width, Col
 		return;
 	}
 
-	FColor* DstRow = mFrameBuffer.GetData() + dstY * CanvasW;
-	const GifByteType* SrcRow = mLineBuffer.GetData();
+	FColor* DstRow = FrameBuffer.GetData() + dstY * CanvasW;
+	const GifByteType* SrcRow = LineBuffer.GetData();
 
 	for (int x = 0; x < Width; ++x)
 	{
@@ -528,21 +528,21 @@ void FGIFDecoder::CompositeRow(int srcY, int dstTop, int dstLeft, int Width, Col
 
 uint32 FGIFDecoder::NextFrame(uint32 DefaultFrameDelay, bool bLooping)
 {
-	if (!mGIF || mFrames.Num() == 0)
+	if (!GIF || Frames.Num() == 0)
 	{
 		return DefaultFrameDelay;
 	}
 
-	if (mCurrentFrame < 0 || mCurrentFrame >= mFrames.Num())
+	if (CurrentFrame < 0 || CurrentFrame >= Frames.Num())
 	{
-		mCurrentFrame = 0;
+		CurrentFrame = 0;
 	}
 
-	const int RenderingFrame = mCurrentFrame;
-	const FFrameMeta& Meta = mFrames[RenderingFrame];
+	const int RenderingFrame = CurrentFrame;
+	const FFrameMeta& Meta = Frames[RenderingFrame];
 
 	// Step 1: 根据"上一帧"的 disposal 清理画布上对应区域。
-	DisposeFrame(mPrevDisposalMode, mPrevRect);
+	DisposeFrame(PrevDisposalMode, PrevRect);
 
 	// Step 2: 当前帧 disposal == PREVIOUS，则在绘制前先快照画布。
 	if (Meta.Disposal == DISPOSE_PREVIOUS)
@@ -556,7 +556,7 @@ uint32 FGIFDecoder::NextFrame(uint32 DefaultFrameDelay, bool bLooping)
 		UE_LOG(LogAnimTexture, Warning, TEXT("FGIFDecoder: skip frame %d (decode failed); canvas left unchanged"),
 			RenderingFrame);
 		// canvas 保留现状；上层会照常更新到 GPU。如果 cursor 已经跑到末尾，
-		// 下一次 Tick 进来若 mCurrentFrame 跨过 mFrames.Num() 会触发 RewindToFirstRecord，
+		// 下一次 Tick 进来若 CurrentFrame 跨过 Frames.Num() 会触发 RewindToFirstRecord，
 		// cursor 自动恢复。
 	}
 
@@ -565,25 +565,25 @@ uint32 FGIFDecoder::NextFrame(uint32 DefaultFrameDelay, bool bLooping)
 	{
 		UE_LOG(LogAnimTexture, VeryVerbose,
 			TEXT("FGIFDecoder::NextFrame frame=%d prevDisp=%d curDisp=%d trans=%d rect=(%d,%d)->(%d,%d) delay=%dms loop=%d"),
-			RenderingFrame, mPrevDisposalMode, Meta.Disposal, Meta.Transparent,
+			RenderingFrame, PrevDisposalMode, Meta.Disposal, Meta.Transparent,
 			Meta.Rect.Min.X, Meta.Rect.Min.Y, Meta.Rect.Max.X, Meta.Rect.Max.Y,
-			Meta.DelayMs, mLoopCount);
+			Meta.DelayMs, LoopCount);
 	}
 
 	// Step 5: 记录"当前帧"为下一帧解码时使用的 prev 状态。
-	mPrevDisposalMode = Meta.Disposal;
-	mPrevRect = Meta.Rect;
-	mPrevTransparentColor = Meta.Transparent;
+	PrevDisposalMode = Meta.Disposal;
+	PrevRect = Meta.Rect;
+	PrevTransparentColor = Meta.Transparent;
 
 	// 推进帧索引。
-	mCurrentFrame++;
-	if (mCurrentFrame >= mFrames.Num())
+	CurrentFrame++;
+	if (CurrentFrame >= Frames.Num())
 	{
-		mLoopCount++;
+		LoopCount++;
 		if (bLooping)
 		{
 			// 回到起点；prev 状态保留，下一次 NextFrame 会基于上一帧的 disposal 正确清理画布。
-			mCurrentFrame = 0;
+			CurrentFrame = 0;
 			// 循环回卷：cursor 复位到 Begin、LZW 状态机全量重置。与 WebPAnimDecoderReset 等价。
 			RewindToFirstRecord();
 		}
@@ -592,7 +592,7 @@ uint32 FGIFDecoder::NextFrame(uint32 DefaultFrameDelay, bool bLooping)
 			// 不循环：停在最后一帧。cursor 此时位于文件末尾；
 			// 后续 NextFrame 调用会因为 cursor 没有可用 IMAGE_DESC 走 skip-and-continue
 			// 路径——视觉上 canvas 维持在最末帧（与原 DGifSlurp 路径行为一致）。
-			mCurrentFrame = mFrames.Num() - 1;
+			CurrentFrame = Frames.Num() - 1;
 		}
 	}
 
@@ -601,18 +601,18 @@ uint32 FGIFDecoder::NextFrame(uint32 DefaultFrameDelay, bool bLooping)
 
 void FGIFDecoder::Reset()
 {
-	mCurrentFrame = 0;
-	mLoopCount = 0;
-	mPrevDisposalMode = DISPOSAL_UNSPECIFIED;
-	mPrevRect = FIntRect();
-	mPrevTransparentColor = NO_TRANSPARENT_COLOR;
-	mSnapshotBuffer.Empty();
+	CurrentFrame = 0;
+	LoopCount = 0;
+	PrevDisposalMode = DISPOSAL_UNSPECIFIED;
+	PrevRect = FIntRect();
+	PrevTransparentColor = NO_TRANSPARENT_COLOR;
+	SnapshotBuffer.Empty();
 
-	// 重新把画布填回 mResolvedBgColor，与 LoadFromMemory 后的初始状态一致。
-	if (mFrameBuffer.Num() > 0)
+	// 重新把画布填回 ResolvedBgColor，与 LoadFromMemory 后的初始状态一致。
+	if (FrameBuffer.Num() > 0)
 	{
-		const FColor Clear = mResolvedBgColor;
-		for (FColor& Pixel : mFrameBuffer)
+		const FColor Clear = ResolvedBgColor;
+		for (FColor& Pixel : FrameBuffer)
 		{
 			Pixel = Clear;
 		}
@@ -624,31 +624,31 @@ void FGIFDecoder::Reset()
 
 uint32 FGIFDecoder::GetWidth() const
 {
-	if (mGIF)
+	if (GIF)
 	{
-		return mGIF->SWidth;
+		return GIF->SWidth;
 	}
 	return 1;
 }
 
 uint32 FGIFDecoder::GetHeight() const
 {
-	if (mGIF)
+	if (GIF)
 	{
-		return mGIF->SHeight;
+		return GIF->SHeight;
 	}
 	return 1;
 }
 
 const FColor* FGIFDecoder::GetFrameBuffer() const
 {
-	return mFrameBuffer.GetData();
+	return FrameBuffer.GetData();
 }
 
 uint32 FGIFDecoder::GetDuration(uint32 DefaultFrameDelay) const
 {
 	int duration = 0;
-	for (const FFrameMeta& M : mFrames)
+	for (const FFrameMeta& M : Frames)
 	{
 		duration += (M.DelayMs == 0) ? static_cast<int>(DefaultFrameDelay) : M.DelayMs;
 	}
@@ -657,25 +657,25 @@ uint32 FGIFDecoder::GetDuration(uint32 DefaultFrameDelay) const
 
 bool FGIFDecoder::SupportsTransparency() const
 {
-	return mbHasTransparency;
+	return bHasTransparency;
 }
 
 FColor FGIFDecoder::ResolveBgColorFromMetadata() const
 {
-	if (!mGIF || !mGIF->SColorMap)
+	if (!GIF || !GIF->SColorMap)
 	{
 		return FColor(0, 0, 0, 0);
 	}
 
-	const int BgIdx = mGIF->SBackGroundColor;
-	if (BgIdx < 0 || BgIdx >= mGIF->SColorMap->ColorCount)
+	const int BgIdx = GIF->SBackGroundColor;
+	if (BgIdx < 0 || BgIdx >= GIF->SColorMap->ColorCount)
 	{
 		return FColor(0, 0, 0, 0);
 	}
 
 	// 扫描所有帧的 GCB transparent index：若 bg 索引被任何一帧用作 transparent，
 	// 则 GIF 作者意图是"bg 即透明"（welcome2 / x-trans / Eokxd 都是这种），用透明。
-	for (const FFrameMeta& M : mFrames)
+	for (const FFrameMeta& M : Frames)
 	{
 		if (M.Transparent == BgIdx)
 		{
@@ -683,14 +683,14 @@ FColor FGIFDecoder::ResolveBgColorFromMetadata() const
 		}
 	}
 
-	const GifColorType& Entry = mGIF->SColorMap->Colors[BgIdx];
+	const GifColorType& Entry = GIF->SColorMap->Colors[BgIdx];
 	return FColor(Entry.Red, Entry.Green, Entry.Blue, 255);
 }
 
 FIntRect FGIFDecoder::ClampRectToCanvas(int Left, int Top, int Width, int Height) const
 {
-	const int CanvasW = mGIF ? mGIF->SWidth : 0;
-	const int CanvasH = mGIF ? mGIF->SHeight : 0;
+	const int CanvasW = GIF ? GIF->SWidth : 0;
+	const int CanvasH = GIF ? GIF->SHeight : 0;
 
 	const int MinX = FMath::Clamp(Left, 0, CanvasW);
 	const int MinY = FMath::Clamp(Top, 0, CanvasH);
@@ -713,10 +713,10 @@ void FGIFDecoder::DisposeFrame(int DisposalMode, const FIntRect& Rect)
 	{
 		// 按 GIF89a 规范：清成 SBackGroundColor。当 bg 与 transparent 索引重合时
 		// ResolveBgColorFromMetadata 已退化为 (0,0,0,0)，与 Chrome 行为兼容。
-		const FColor Clear = mResolvedBgColor;
+		const FColor Clear = ResolvedBgColor;
 		for (int y = Rect.Min.Y; y < Rect.Max.Y; y++)
 		{
-			FColor* Row = mFrameBuffer.GetData() + y * CanvasW;
+			FColor* Row = FrameBuffer.GetData() + y * CanvasW;
 			for (int x = Rect.Min.X; x < Rect.Max.X; x++)
 			{
 				Row[x] = Clear;
@@ -732,19 +732,19 @@ void FGIFDecoder::DisposeFrame(int DisposalMode, const FIntRect& Rect)
 
 void FGIFDecoder::SaveSnapshot()
 {
-	mSnapshotBuffer = mFrameBuffer;
+	SnapshotBuffer = FrameBuffer;
 }
 
 void FGIFDecoder::RestoreSnapshot(const FIntRect& Rect)
 {
-	if (mSnapshotBuffer.Num() != mFrameBuffer.Num())
+	if (SnapshotBuffer.Num() != FrameBuffer.Num())
 	{
 		// 还没拍过有效快照（例如首帧之前），退化为清成 bg 色（与 LoadFromMemory 初始一致）。
 		const int CanvasW = static_cast<int>(GetWidth());
-		const FColor Clear = mResolvedBgColor;
+		const FColor Clear = ResolvedBgColor;
 		for (int y = Rect.Min.Y; y < Rect.Max.Y; y++)
 		{
-			FColor* Row = mFrameBuffer.GetData() + y * CanvasW;
+			FColor* Row = FrameBuffer.GetData() + y * CanvasW;
 			for (int x = Rect.Min.X; x < Rect.Max.X; x++)
 			{
 				Row[x] = Clear;
@@ -756,8 +756,8 @@ void FGIFDecoder::RestoreSnapshot(const FIntRect& Rect)
 	const int CanvasW = static_cast<int>(GetWidth());
 	for (int y = Rect.Min.Y; y < Rect.Max.Y; y++)
 	{
-		FColor* DstRow = mFrameBuffer.GetData() + y * CanvasW;
-		const FColor* SrcRow = mSnapshotBuffer.GetData() + y * CanvasW;
+		FColor* DstRow = FrameBuffer.GetData() + y * CanvasW;
+		const FColor* SrcRow = SnapshotBuffer.GetData() + y * CanvasW;
 		for (int x = Rect.Min.X; x < Rect.Max.X; x++)
 		{
 			DstRow[x] = SrcRow[x];

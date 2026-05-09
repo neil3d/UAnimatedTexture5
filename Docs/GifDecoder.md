@@ -25,7 +25,7 @@ Files involved:
 flowchart LR
     Bytes[GIF byte buffer] --> Slurp["DGifSlurp<br/>(parse + LZW decode all frames into RasterBits)"]
     Slurp --> StateMachine["FGIFDecoder::NextFrame<br/>(per-frame disposal + composite)"]
-    StateMachine --> FrameBuf["mFrameBuffer<br/>TArray FColor (BGRA in memory)"]
+    StateMachine --> FrameBuf["FrameBuffer<br/>TArray FColor (BGRA in memory)"]
     FrameBuf --> Copy["RenderFrameToTexture<br/>(memcpy snapshot, enqueue render cmd)"]
     Copy --> RHI["AT_UpdateFrameToTexture<br/>(PF_B8G8R8A8 RHI texture)"]
 ```
@@ -36,14 +36,14 @@ Key facts:
   `SavedImages[i].RasterBits`, **already de-interlacing interlaced frames**
   (verified in [`dgif_lib.c`](../Plugins/AnimatedTexturePlugin/Source/AnimatedTexture/Private/giflib/dgif_lib.c)
   around line 1229), so the decoder never has to deal with interlace itself.
-- `FGIFDecoder::mFrameBuffer` is a flat `TArray<FColor>` representing the
+- `FGIFDecoder::FrameBuffer` is a flat `TArray<FColor>` representing the
   *virtual canvas* (`SWidth × SHeight`). Every frame is composited onto it.
 - The buffer is laid out as BGRA in memory (matches `FColor`'s field order on
   little-endian platforms), which matches `PF_B8G8R8A8`. No swizzling is
   needed during upload.
 - `RenderFrameToTexture` always allocates a fresh copy of the buffer before
   enqueuing the render command, so the GameThread is free to overwrite the
-  decoder's `mFrameBuffer` for the next frame while the RHI upload is in
+  decoder's `FrameBuffer` for the next frame while the RHI upload is in
   flight.
 
 ---
@@ -68,11 +68,11 @@ at the start of the next frame.
 flowchart TD
     Start([NextFrame for frame i]) --> Step1{prevDisposal?}
     Step1 -->|UNSPECIFIED / DO_NOT| Step2[Parse current GCB]
-    Step1 -->|BACKGROUND| Bg[Clear prevRect to mResolvedBgColor] --> Step2
+    Step1 -->|BACKGROUND| Bg[Clear prevRect to ResolvedBgColor] --> Step2
     Step1 -->|PREVIOUS| Prev[Restore prevRect from snapshot] --> Step2
 
     Step2 --> Step3{current disposal<br/>== PREVIOUS?}
-    Step3 -->|yes| Snap[Snapshot whole canvas to mSnapshotBuffer] --> Step4
+    Step3 -->|yes| Snap[Snapshot whole canvas to SnapshotBuffer] --> Step4
     Step3 -->|no| Step4[Composite current sub-image]
 
     Step4 --> Loop["For each pixel c in clamped sub-rect:<br/>c == transparent ? skip<br/>: write RGB + A=255"]
@@ -84,18 +84,18 @@ flowchart TD
 
 | Member | Purpose |
 |---|---|
-| `mCurrentFrame` | Index of the frame to be rendered on the next `NextFrame` call. |
-| `mPrevDisposalMode` | Disposal of the frame that was *just* rendered. Drives Step 1. |
-| `mPrevRect` | Sub-image rect of the frame that was just rendered, already clamped to canvas. |
-| `mPrevTransparentColor` | Transparent palette index of the previously rendered frame (kept for symmetry / future use). |
-| `mSnapshotBuffer` | Whole-canvas copy taken whenever the *current* frame has `disposal == PREVIOUS`. Used by `RestoreSnapshot`. |
-| `mResolvedBgColor` | Cached background fill color, see Section 3. |
+| `CurrentFrame` | Index of the frame to be rendered on the next `NextFrame` call. |
+| `PrevDisposalMode` | Disposal of the frame that was *just* rendered. Drives Step 1. |
+| `PrevRect` | Sub-image rect of the frame that was just rendered, already clamped to canvas. |
+| `PrevTransparentColor` | Transparent palette index of the previously rendered frame (kept for symmetry / future use). |
+| `SnapshotBuffer` | Whole-canvas copy taken whenever the *current* frame has `disposal == PREVIOUS`. Used by `RestoreSnapshot`. |
+| `ResolvedBgColor` | Cached background fill color, see Section 3. |
 
 ### 2.3 Looping
 
 When the cursor advances past the last frame:
 
-- If `bLooping` is true, `mCurrentFrame` wraps to 0 — but the `prev*` state
+- If `bLooping` is true, `CurrentFrame` wraps to 0 — but the `prev*` state
   is **deliberately preserved**. That way, the dispose action for the
   animation's last frame is applied before drawing frame 0 of the new loop,
   which is the only way looping animations stay consistent across cycles.
@@ -106,10 +106,10 @@ When the cursor advances past the last frame:
 
 `PlayFromStart` (and thus `Reset`) wipes:
 
-- `mCurrentFrame = 0`, `mLoopCount = 0`
+- `CurrentFrame = 0`, `LoopCount = 0`
 - All `prev*` state back to defaults
-- `mSnapshotBuffer.Empty()`
-- Re-fills `mFrameBuffer` with `mResolvedBgColor`
+- `SnapshotBuffer.Empty()`
+- Re-fills `FrameBuffer` with `ResolvedBgColor`
 
 So after a `Reset`, the next `NextFrame` call sees the same world as the
 first call after `LoadFromMemory`.
@@ -156,7 +156,7 @@ breaking GIFs that depend on a real bg color.
 3. Otherwise, look up `SColorMap->Colors[SBackGroundColor]` and return it
    with `A = 255`.
 
-The result is cached in `mResolvedBgColor` and used everywhere the canvas
+The result is cached in `ResolvedBgColor` and used everywhere the canvas
 needs to be filled or cleared (Section 4 below).
 
 ### 3.3 Why this is safe
@@ -179,13 +179,13 @@ affected — and those are exactly the ones we want to fix.
 
 ---
 
-## 4. Where `mResolvedBgColor` Is Used
+## 4. Where `ResolvedBgColor` Is Used
 
 | Site | What it does |
 |---|---|
-| `LoadFromMemory` | Initial canvas fill via `mFrameBuffer.Init(mResolvedBgColor, …)`. |
+| `LoadFromMemory` | Initial canvas fill via `FrameBuffer.Init(ResolvedBgColor, …)`. |
 | `Reset` | Re-fill canvas back to the same initial state. |
-| `DisposeFrame` (`DISPOSE_BACKGROUND` branch) | Clear `prevRect` to `mResolvedBgColor` before drawing the next frame. |
+| `DisposeFrame` (`DISPOSE_BACKGROUND` branch) | Clear `prevRect` to `ResolvedBgColor` before drawing the next frame. |
 | `RestoreSnapshot` (fallback) | Used when a frame requests `DISPOSE_PREVIOUS` but no valid snapshot exists yet (which can only happen if the very first frame uses PREVIOUS, since we re-snapshot lazily). |
 | `Close` | Reset back to `(0,0,0,0)` so a re-used decoder instance starts clean. |
 
@@ -215,10 +215,10 @@ edges in pre-multiplied alpha contexts.
 | Concern | Where | Behavior |
 |---|---|---|
 | Empty / null input buffer | `LoadFromMemory` | Logs error, returns false. |
-| `DGifSlurp` failure | `LoadFromMemory` | Logs `mGIF->Error`, returns false; `Close()` releases the partially-built `GifFileType`. |
+| `DGifSlurp` failure | `LoadFromMemory` | Logs `GIF->Error`, returns false; `Close()` releases the partially-built `GifFileType`. |
 | Zero / negative canvas size | `LoadFromMemory` | Logs error, returns false. |
 | `ImageCount <= 0` | `NextFrame` | Returns `DefaultFrameDelay` immediately. |
-| `mCurrentFrame` out of range | `NextFrame` | Self-heals by resetting to 0. |
+| `CurrentFrame` out of range | `NextFrame` | Self-heals by resetting to 0. |
 | Frame has no color map (no LCT and no GCT) | `NextFrame` | Logs warning, skips drawing for this frame, still advances state. |
 | Sub-image rect outside canvas | `ClampRectToCanvas` | Half-open `[Min, Max)` clip; an empty rect early-outs in `DisposeFrame` and the draw loop. |
 | Color index out of range (`c >= ColorCount`) | Draw loop | Skips the pixel. |

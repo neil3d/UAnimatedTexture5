@@ -174,7 +174,7 @@ so when both flags align with a finite-loop file, after enough loops
 end-of-stream, and the animation freezes on its last frame the same way it
 does for `bLooping = false`.
 
-`FGIFDecoder::GetCompletedLoops()` reuses its existing `mLoopCount`
+`FGIFDecoder::GetCompletedLoops()` reuses its existing `LoopCount`
 counter; `GetLoopCount()` falls back to the base default (0) because the
 giflib path does not currently parse the `NETSCAPE2.0` application
 extension. With `bRespectFileLoopCount` enabled, GIFs therefore behave
