@@ -11,6 +11,7 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintAsyncActionBase.h"
+#include "Templates/Atomic.h"
 #include "AnimatedTextureLoadTypes.h"
 #include "AsyncDownloadAnimatedTexture.generated.h"
 
@@ -100,5 +101,8 @@ private:
 
 	TSharedPtr<FAnimatedTextureDownloader, ESPMode::ThreadSafe> Downloader;
 
-	bool bFinished = false;
+	// 完成标志：Cancel / HandleComplete / HandleError 三方共享。
+	// 通过 Exchange(true) 一次性"领取"完成权，保证终态广播与 RemoveFromRoot 只发生一次。
+	// 任意线程可写（Cancel 允许任意线程调用）。
+	TAtomic<bool> bFinished{ false };
 };

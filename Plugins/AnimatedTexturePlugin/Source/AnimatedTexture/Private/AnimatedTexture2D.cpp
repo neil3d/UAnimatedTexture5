@@ -103,11 +103,31 @@ void UAnimatedTexture2D::Tick(float DeltaTime)
 			&& Decoder->GetCompletedLoops() >= FileLoopCount);
 
 	FrameTime += DeltaTime * PlayRate;
-	if (FrameTime < FrameDelay)
-		return;
 
-	FrameTime = 0;
-	FrameDelay = RenderFrameToTexture(bEffectiveLooping);
+	// carry-over + 限次赶帧：替换原 `FrameTime = 0` 的非 carry-over 实现。
+	// - 平稳路径：每 Tick 至多推进 1 帧，残余 FrameTime 留到下一 Tick，避免长期播放与时间轴漂移。
+	// - hitch 路径：单 Tick 内可连推多帧（debugger 暂停 / loading hitch / 切换前后台），
+	//   但用 MaxCatchUpFrames 限上限，防止瞬间一次性 enqueue 大量 RHI upload 形成尖刺。
+	// - 死循环兜底：解码器对损坏帧可能返回 0；若不钳到 DefaultFrameDelay，FrameTime >= 0 永远成立。
+	constexpr int32 MaxCatchUpFrames = 4;
+	int32 CatchUpFrames = 0;
+	while (FrameTime >= FrameDelay && CatchUpFrames < MaxCatchUpFrames)
+	{
+		FrameTime -= FrameDelay;
+		FrameDelay = RenderFrameToTexture(bEffectiveLooping);
+
+		if (FrameDelay <= 0.0f)
+		{
+			FrameDelay = DefaultFrameDelay;
+		}
+		++CatchUpFrames;
+	}
+
+	// 超出赶帧上限：丢弃残余 FrameTime，从当前时间继续。
+	if (CatchUpFrames >= MaxCatchUpFrames)
+	{
+		FrameTime = 0.0f;
+	}
 }
 
 

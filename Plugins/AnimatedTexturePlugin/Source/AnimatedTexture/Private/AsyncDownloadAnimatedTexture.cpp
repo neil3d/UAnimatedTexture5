@@ -71,42 +71,40 @@ void UAsyncDownloadAnimatedTexture::Activate()
 
 void UAsyncDownloadAnimatedTexture::Cancel()
 {
-	// 线程模型说明：
-	// - HTTP 回调（HandleComplete/HandleError）依赖 UE5 默认的 EHttpRequestDelegateThreadPolicy::CompleteOnGameThread，
-	//   因此都在 GameThread 触发；
-	// - Cancel() 由蓝图触发时也在 GameThread，但允许从任意线程调用，故下方保留 GameThread 分发；
-	// - bFinished 当前仅在 GameThread 读写，无需原子化；若未来把 HTTP 策略切到 CompleteOnHttpThread，
-	//   需把 bFinished 改为 TAtomic 或加锁。
-	if (bFinished)
+	// 线程模型：
+	// - 任意线程可调用 Cancel；HandleComplete / HandleError 依赖 UE5 默认的
+	//   EHttpRequestDelegateThreadPolicy::CompleteOnGameThread，固定在 GameThread 触发。
+	// - 三方共享 bFinished（TAtomic<bool>），通过 Exchange(true) 一次性"领取"完成权；
+	//   后到者观察到旧值为 true 后立即 return，不会重复广播或重复 RemoveFromRoot。
+	// - OnCanceled 广播 + RemoveFromRoot 必须在 GameThread；非 GameThread 时分发过去。
+	if (bFinished.Exchange(true))
 	{
-		return;
+		return; // 已被其他路径领走
 	}
-	bFinished = true;
 
 	if (Downloader.IsValid())
 	{
 		Downloader->Cancel();
 	}
 
-	// 在 GameThread 上广播 OnCanceled（Cancel 可能被任意线程/帧调用，这里统一到 GameThread）。
 	TWeakObjectPtr<UAsyncDownloadAnimatedTexture> WeakThis(this);
+	auto Finalize = [WeakThis]()
+	{
+		UAsyncDownloadAnimatedTexture* Self = WeakThis.Get();
+		if (!Self)
+		{
+			return;
+		}
+		Self->OnCanceled.Broadcast();
+		Self->RemoveFromRoot();
+	};
 	if (IsInGameThread())
 	{
-		OnCanceled.Broadcast();
-		RemoveFromRoot();
+		Finalize();
 	}
 	else
 	{
-		AsyncTask(ENamedThreads::GameThread, [WeakThis]()
-		{
-			UAsyncDownloadAnimatedTexture* Self = WeakThis.Get();
-			if (!Self)
-			{
-				return;
-			}
-			Self->OnCanceled.Broadcast();
-			Self->RemoveFromRoot();
-		});
+		AsyncTask(ENamedThreads::GameThread, MoveTemp(Finalize));
 	}
 }
 
@@ -115,8 +113,8 @@ void UAsyncDownloadAnimatedTexture::HandleComplete(const TArray<uint8>& Body, co
 	// HTTP 回调依赖 UE5 默认的 CompleteOnGameThread 策略，保证此处在 GameThread。
 	check(IsInGameThread());
 
-	// 可能已经被 Cancel 或提前结束。
-	if (bFinished)
+	// 与 Cancel / HandleError 通过 bFinished.Exchange(true) 抢占；后到者直接 return。
+	if (bFinished.Exchange(true))
 	{
 		return;
 	}
@@ -124,7 +122,6 @@ void UAsyncDownloadAnimatedTexture::HandleComplete(const TArray<uint8>& Body, co
 	// WorldContext 已失效：静默退出。
 	if (WorldContextWeak.IsStale())
 	{
-		bFinished = true;
 		RemoveFromRoot();
 		return;
 	}
@@ -132,7 +129,6 @@ void UAsyncDownloadAnimatedTexture::HandleComplete(const TArray<uint8>& Body, co
 	UAnimatedTexture2D* Texture = UAnimatedTextureFunctionLibrary::LoadAnimatedTextureFromMemory(
 		Body, EAnimatedTextureType::None, /*Outer=*/ nullptr, NAME_None);
 
-	bFinished = true;
 	if (!Texture)
 	{
 		OnFailed.Broadcast(EAnimatedTextureLoadError::DecodeFailed);
@@ -149,19 +145,17 @@ void UAsyncDownloadAnimatedTexture::HandleError(EAnimatedTextureLoadError Error)
 	// HTTP 回调依赖 UE5 默认的 CompleteOnGameThread 策略，保证此处在 GameThread。
 	check(IsInGameThread());
 
-	if (bFinished)
+	if (bFinished.Exchange(true))
 	{
 		return;
 	}
 
 	if (WorldContextWeak.IsStale())
 	{
-		bFinished = true;
 		RemoveFromRoot();
 		return;
 	}
 
-	bFinished = true;
 	OnFailed.Broadcast(Error);
 	RemoveFromRoot();
 }

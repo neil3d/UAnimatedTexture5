@@ -14,6 +14,12 @@
 #include "Materials/MaterialExpressionTextureSampleParameter.h"
 #include "MtlExpTextureSampleParameterAnim.generated.h"
 
+/**
+ * 材质参数表达式：让材质参数能接受 UAnimatedTexture2D。
+ * 故意派生自 UMaterialExpressionTextureSampleParameter（而非 ...Parameter2D），
+ * 以绕开父类 TextureIsValid 中的 IsA(UTexture2D) 硬检查。
+ * 详见 Docs/BaseClassChoice.md §4.2。
+ */
 UCLASS(collapsecategories, hidecategories = Object)
 class ANIMATEDTEXTURE_API UMtlExpTextureSampleParameterAnim : public UMaterialExpressionTextureSampleParameter
 {

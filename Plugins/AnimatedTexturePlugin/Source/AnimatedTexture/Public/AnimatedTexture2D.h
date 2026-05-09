@@ -131,7 +131,10 @@ public:	// FTickableGameObject Interface
 	virtual void Tick(float DeltaTime) override;
 	virtual bool IsTickable() const override
 	{
-		return true;
+		// 收紧 Tick 调度门槛：CDO/Archetype、未 CreateResource 或已 Stop 的实例都不进
+		// FTickableObjectsManager 的轮询。Tick 函数体内仍保留 bPlaying / Decoder 防御，
+		// 应对 Stop 与 Tick 同帧调度的窗口期。
+		return !IsTemplate() && Decoder.IsValid() && bPlaying;
 	}
 	virtual TStatId GetStatId() const
 	{
